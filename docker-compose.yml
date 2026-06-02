@@ -30,6 +30,7 @@ services:
       trade
       --config /freqtrade/config.json
       --strategy AIRSIStrategy
+      --strategy-path /freqtrade/user_data/strategies
       --logfile /freqtrade/user_data/logs/freqtrade.log
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/ping"]
@@ -51,6 +52,8 @@ services:
       - FREQTRADE_API_URL=http://freqtrade:8080
       - FREQTRADE_API_USER=${FREQTRADE_API_USER:-botuser}
       - FREQTRADE_API_PASS=${FREQTRADE_API_PASS:-changeme}
+      - FREQTRADE_JWT_SECRET=${FREQTRADE_JWT_SECRET}
+      - SESSION_SECRET=${SESSION_SECRET}
       - NODE_ENV=production
     depends_on:
       freqtrade:
