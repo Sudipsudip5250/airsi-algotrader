@@ -1,0 +1,72 @@
+version: "3.9"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Crypto Trading Bot — Docker Compose
+#
+# Usage:
+#   Paper trading:  docker compose up
+#   Live trading:   FREQTRADE_CONFIG=config.live.json docker compose up
+#   Stop:           docker compose down
+# ──────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── Freqtrade Bot ─────────────────────────────────────────────────
+  freqtrade:
+    image: freqtradeorg/freqtrade:stable
+    container_name: freqtrade-bot
+    restart: unless-stopped
+    volumes:
+      - ./bot:/freqtrade/user_data
+      - ./bot/config.paper.json:/freqtrade/config.json:ro
+      - ./bot/strategies:/freqtrade/user_data/strategies:ro
+    ports:
+      - "8080:8080"    # Freqtrade REST API & UI
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+    command: >
+      trade
+      --config /freqtrade/config.json
+      --strategy AIRSIStrategy
+      --logfile /freqtrade/user_data/logs/freqtrade.log
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Dashboard API (Node.js proxy to Freqtrade) ────────────────────
+  dashboard-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: dashboard-api
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - FREQTRADE_API_URL=http://freqtrade:8080
+      - FREQTRADE_API_USER=${FREQTRADE_API_USER:-botuser}
+      - FREQTRADE_API_PASS=${FREQTRADE_API_PASS:-changeme}
+      - NODE_ENV=production
+    depends_on:
+      freqtrade:
+        condition: service_healthy
+
+  # ── Ollama (optional local AI) ────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    profiles:
+      - local-ai     # Only starts with: docker compose --profile local-ai up
+
+volumes:
+  ollama_data:

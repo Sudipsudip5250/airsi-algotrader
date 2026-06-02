@@ -47,3 +47,26 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+
+# Environment / Secrets
+.env
+.env.local
+.env.production
+
+# Freqtrade data (large — keep out of Git)
+bot/user_data/data/
+bot/user_data/backtest_results/
+bot/user_data/logs/
+bot/user_data/*.sqlite
+
+# Logs
+logs/
+*.log

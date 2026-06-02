@@ -1,22 +1,22 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Trading Bot Dashboard API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: bot
+    description: Trading bot operations
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +24,125 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /bot/ping:
+    get:
+      operationId: botPing
+      tags: [bot]
+      summary: Is the bot online?
+      responses:
+        "200":
+          description: Ping result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotPing"
+
+  /bot/status:
+    get:
+      operationId: botStatus
+      tags: [bot]
+      summary: Open trades and bot state
+      responses:
+        "200":
+          description: Bot status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotStatus"
+
+  /bot/profit:
+    get:
+      operationId: botProfit
+      tags: [bot]
+      summary: Overall profit/loss summary
+      responses:
+        "200":
+          description: Profit summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotProfit"
+
+  /bot/performance:
+    get:
+      operationId: botPerformance
+      tags: [bot]
+      summary: Per-pair performance breakdown
+      responses:
+        "200":
+          description: Per-pair performance
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PairPerformance"
+
+  /bot/trades:
+    get:
+      operationId: botTrades
+      tags: [bot]
+      summary: Recent closed trades
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Trade list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradeList"
+
+  /bot/balance:
+    get:
+      operationId: botBalance
+      tags: [bot]
+      summary: Wallet balances
+      responses:
+        "200":
+          description: Balance info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotBalance"
+
+  /bot/logs:
+    get:
+      operationId: botLogs
+      tags: [bot]
+      summary: Recent log lines
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        "200":
+          description: Log lines
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotLogs"
+
+  /bot/config:
+    get:
+      operationId: botConfig
+      tags: [bot]
+      summary: Active bot configuration
+      responses:
+        "200":
+          description: Bot config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotConfig"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +150,214 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    BotPing:
+      type: object
+      properties:
+        online:
+          type: boolean
+        status:
+          type: ["string", "null"]
+      required: [online]
+
+    BotStatus:
+      type: object
+      properties:
+        online:
+          type: boolean
+        mode:
+          type: ["string", "null"]
+        trades:
+          type: array
+          items:
+            $ref: "#/components/schemas/OpenTrade"
+      required: [online]
+
+    OpenTrade:
+      type: object
+      properties:
+        trade_id:
+          type: integer
+        pair:
+          type: string
+        open_rate:
+          type: number
+        current_rate:
+          type: number
+        profit_pct:
+          type: number
+        profit_abs:
+          type: number
+        open_date:
+          type: string
+        stake_amount:
+          type: number
+        amount:
+          type: number
+        stop_loss_pct:
+          type: ["number", "null"]
+        stoploss_current_dist_pct:
+          type: ["number", "null"]
+      required: [trade_id, pair, open_rate, current_rate, profit_pct, profit_abs, open_date]
+
+    BotProfit:
+      type: object
+      properties:
+        profit_all_coin:
+          type: ["number", "null"]
+        profit_all_percent:
+          type: ["number", "null"]
+        profit_closed_coin:
+          type: ["number", "null"]
+        profit_closed_percent:
+          type: ["number", "null"]
+        winning_trades:
+          type: ["integer", "null"]
+        losing_trades:
+          type: ["integer", "null"]
+        trade_count:
+          type: ["integer", "null"]
+        first_trade_date:
+          type: ["string", "null"]
+        latest_trade_date:
+          type: ["string", "null"]
+        avg_duration:
+          type: ["string", "null"]
+        best_pair:
+          type: ["string", "null"]
+        worst_pair:
+          type: ["string", "null"]
+        stake_currency:
+          type: ["string", "null"]
+      required: []
+
+    PairPerformance:
+      type: object
+      properties:
+        pair:
+          type: string
+        profit:
+          type: number
+        profit_pct:
+          type: number
+        count:
+          type: integer
+      required: [pair, profit, profit_pct, count]
+
+    ClosedTrade:
+      type: object
+      properties:
+        trade_id:
+          type: integer
+        pair:
+          type: string
+        open_rate:
+          type: number
+        close_rate:
+          type: ["number", "null"]
+        profit_pct:
+          type: ["number", "null"]
+        profit_abs:
+          type: ["number", "null"]
+        open_date:
+          type: string
+        close_date:
+          type: ["string", "null"]
+        sell_reason:
+          type: ["string", "null"]
+        stake_amount:
+          type: number
+      required: [trade_id, pair, open_rate, open_date, stake_amount]
+
+    TradeList:
+      type: object
+      properties:
+        trades:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClosedTrade"
+        trades_count:
+          type: integer
+        total_trades:
+          type: integer
+      required: []
+
+    BalanceCurrency:
+      type: object
+      properties:
+        currency:
+          type: string
+        free:
+          type: number
+        balance:
+          type: number
+        used:
+          type: number
+        est_stake:
+          type: number
+        stake:
+          type: string
+      required: [currency, free, balance, used]
+
+    BotBalance:
+      type: object
+      properties:
+        currencies:
+          type: array
+          items:
+            $ref: "#/components/schemas/BalanceCurrency"
+        total:
+          type: ["number", "null"]
+        stake:
+          type: ["string", "null"]
+        note:
+          type: ["string", "null"]
+      required: []
+
+    LogLine:
+      type: object
+      properties:
+        timestamp:
+          type: number
+        level:
+          type: integer
+        message:
+          type: string
+        funcname:
+          type: string
+        lineno:
+          type: integer
+      required: [timestamp, level, message]
+
+    BotLogs:
+      type: object
+      properties:
+        logs:
+          type: array
+          items:
+            $ref: "#/components/schemas/LogLine"
+        log_count:
+          type: integer
+      required: []
+
+    BotConfig:
+      type: object
+      properties:
+        strategy:
+          type: ["string", "null"]
+        state:
+          type: ["string", "null"]
+        dry_run:
+          type: ["boolean", "null"]
+        stake_currency:
+          type: ["string", "null"]
+        stake_amount:
+          type: ["number", "null"]
+        max_open_trades:
+          type: ["integer", "null"]
+        timeframe:
+          type: ["string", "null"]
+        exchange:
+          type: ["string", "null"]
+      required: []
