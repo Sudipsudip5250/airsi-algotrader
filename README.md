@@ -1,211 +1,219 @@
-# 🤖 AI Crypto Trading Bot
+# AIRSI Trader
 
-> **Educational micro-budget automated crypto trading bot.**  
-> Built with Freqtrade, Groq AI (free), Ollama (local AI), Telegram alerts, and a live React dashboard.
+Educational crypto trading bot with AI commentary, Telegram alerts, and a React dashboard. Built on [Freqtrade](https://freqtrade.io).
 
 ---
 
-## ⚡ Quick Start (Clone & Run)
+## Quick Start
 
 ```bash
-# 1. Clone the repo
-git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git
-cd YOUR_REPO
-
-# Linux / macOS
-bash install.sh
-
-# Windows (PowerShell as Administrator)
-.\install.ps1
+git clone https://github.com/sudipsudip5250/airsi-trader.git
+cd airsi-trader
+bash install.sh                  # one-click: installs everything
+cp .env.example .env             # create your config file
+source scripts/activate.sh       # activate Python environment
+cd bot && pytest tests/ -v       # verify 14/14 tests pass
 ```
+
+> That's it. You're ready. See [First Time Test](#first-time-test) for what to run next.
 
 ---
 
-## 📁 Repository Structure
+## Prerequisites
 
-```
-.
-├── bot/                        # Trading bot (Python / Freqtrade)
-│   ├── strategies/
-│   │   └── AIRSIStrategy.py    # RSI + EMA + Bollinger Bands strategy
-│   ├── ai_client.py            # Groq + Ollama AI integration
-│   ├── telegram_notifier.py    # Push notifications
-│   ├── config.paper.json       # Paper trading config (SAFE — virtual money)
-│   ├── config.live.json        # Live trading config (real money — use carefully)
-│   ├── requirements.txt        # Python dependencies
-│   └── tests/                  # Unit tests (pytest)
-│       ├── conftest.py
-│       └── test_strategy.py
-│
-├── artifacts/
-│   ├── api-server/             # Express API (proxies Freqtrade REST API)
-│   └── dashboard/              # React dashboard (trades, P&L, logs)
-│
-├── scripts/
-│   ├── download_data.py        # Download 6 months of free historical data
-│   ├── run_backtest.py         # Run backtest + print Go/No-Go summary
-│   └── setup_ollama.sh         # Install Ollama + pull Mistral model
-│
-├── docker-compose.yml          # Run everything with one command
-├── install.sh                  # Linux/macOS installer
-├── install.ps1                 # Windows installer
-├── .env.example                # Environment variables template
-└── README.md                   # This file
-```
-
----
-
-## 🔧 Tech Stack
-
-| Layer | Tool | Cost |
+| Requirement | Version | Check |
 |---|---|---|
-| Trading framework | [Freqtrade](https://freqtrade.io) | Free / Open-source |
-| AI (cloud) | [Groq API](https://console.groq.com) — LLaMA 3 8B | Free tier (14,400 req/day) |
-| AI (local) | [Ollama](https://ollama.com) + Mistral 7B | Free, runs locally |
-| Exchange | Binance (testnet for paper, live for real) | Free API |
-| Notifications | Telegram Bot API | Free |
-| Dashboard | React + Vite + Recharts | Free / Open-source |
-| Backend API | Node.js + Express | Free / Open-source |
-| Database | SQLite (built into Freqtrade) | Free |
+| **Python** | 3.10+ | `python3 --version` |
+| **Git** | any | `git --version` |
+| **Node.js** (optional) | 18+ | `node --version` — needed only for the dashboard |
+
+The `install.sh` script will check these and prompt you if anything is missing.  
+**Windows?** Run `install.ps1` as Administrator instead.
 
 ---
 
-## 🗝️ Configuration
+## What This Bot Does
+
+This bot connects to Binance (paper or live), analyzes market data using multiple indicators, and executes trades based on a strategy. It can optionally use AI to generate commentary on market conditions.
+
+**How it works:**
+
+```
+Market Data (Binance) → Strategy (AIRSIStrategy) → Trade Decision
+                                                     ↓
+                              AI Commentary ← Telegram Alerts ← Trade Executed
+```
+
+**The AI fallback chain** (no key needed for the first one, but each next one needs its own key):
+```
+Groq (fastest) → OpenRouter (many models) → HuggingFace (free) → Ollama (local)
+```
+If one provider fails, the next is tried automatically.
+
+---
+
+## Step-by-Step Guide
+
+### 1. Install Dependencies
+
+```bash
+bash install.sh
+```
+
+This will:
+- Create a Python virtual environment (`venv/`)
+- Install Python packages (freqtrade, pandas, etc.)
+- Install Node.js packages for the dashboard
+- Create the `scripts/activate.sh` helper
+
+### 2. Configure API Keys
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` with your keys:
+Open `.env` in any text editor and fill in the keys you want to use.  
+**Minimum to get started:** you can skip all keys and just run paper trading — it works with public Binance data.
 
-| Variable | Where to get it |
+| Key | Required for | How to get |
+|---|---|---|
+| `TELEGRAM_BOT_TOKEN` | Telegram alerts | [docs/api-keys.md](docs/api-keys.md) |
+| `TELEGRAM_CHAT_ID` | Telegram alerts | [docs/api-keys.md](docs/api-keys.md) |
+| `GROQ_API_KEY` | AI commentary (fastest) | [console.groq.com](https://console.groq.com) — free tier |
+| `OPENROUTER_API_KEY` | AI fallback | [openrouter.ai/keys](https://openrouter.ai/keys) |
+| `HUGGINGFACE_API_KEY` | AI fallback | [hf.co/settings/tokens](https://hf.co/settings/tokens) |
+| `EXCHANGE_API_KEY` | Live trading only | Binance API dashboard |
+
+### 3. Activate Environment
+
+```bash
+source scripts/activate.sh
+```
+
+Do this every time you open a new terminal. You should see `(venv)` appear in your prompt.
+
+### 4. Verify Setup
+
+```bash
+cd bot && python3 -m pytest tests/ -v
+```
+
+All 14 tests should pass. If they don't, check [troubleshooting](#troubleshooting).
+
+---
+
+## First Time Test
+
+After setup, run through this flow to make sure everything works:
+
+```bash
+# 1. Activate (if not already)
+source scripts/activate.sh
+
+# 2. Download 30 days of market data
+python3 scripts/download_data.py --days 30
+
+# 3. Run a backtest to see how the strategy performs
+python3 scripts/run_backtest.py --days 30
+
+# 4. Start paper trading (play money: $1000)
+freqtrade trade --config bot/config.paper.json --strategy AIRSIStrategy
+```
+
+**Paper trading** simulates real trades with virtual money. The bot:
+- Connects to Binance for live price data
+- Evaluates the strategy on every new candle
+- Logs virtual trades to `tradesv3.dryrun.sqlite`
+- Starts a REST API at `http://localhost:8080`
+
+Press `Ctrl+C` to stop.
+
+---
+
+## Common Commands
+
+| Action | Command |
 |---|---|
-| `TELEGRAM_BOT_TOKEN` | Message `@BotFather` → `/newbot` |
-| `TELEGRAM_CHAT_ID` | Open `https://api.telegram.org/bot<TOKEN>/getUpdates` |
-| `GROQ_API_KEY` | [console.groq.com](https://console.groq.com) — free signup |
-| `EXCHANGE_API_KEY` | Binance → API Management (leave blank for paper trading) |
+| Activate environment | `source scripts/activate.sh` |
+| Run tests | `cd bot && pytest tests/ -v` |
+| Download data | `python3 scripts/download_data.py --days 180` |
+| Run backtest | `python3 scripts/run_backtest.py --days 180` |
+| Start paper trading | `freqtrade trade --config bot/config.paper.json --strategy AIRSIStrategy` |
+| Start live trading | `freqtrade trade --config bot/config.live.json --strategy AIRSIStrategy` |
+| Check running bot | `tail -f user_data/logs/freqtrade.log` |
+| View trade history | `freqtrade trade --db-url sqlite:///tradesv3.dryrun.sqlite` |
 
 ---
 
-## 🔬 4-Phase Testing Pipeline
+## Docs
 
-### Phase 1 — Download Historical Data (Free)
-```bash
-source venv/bin/activate
-python scripts/download_data.py --days 180 --pairs BTC/USDT ETH/USDT SOL/USDT
-```
-Downloads 6 months of 1h, 4h, and 1d candles from Binance's public API.
-
-### Phase 2 — Backtest
-```bash
-python scripts/run_backtest.py
-```
-Runs the strategy against historical data and prints a **Go/No-Go** checklist:
-- ✅ Max drawdown < 15%
-- ✅ Win rate > 50%
-- ✅ Total profit > 0
-- ✅ Trade count ≥ 30 (statistical significance)
-
-### Phase 3 — Unit Tests
-```bash
-cd bot && pytest tests/ -v
-```
-Tests include:
-- RSI is always 0–100 ✓
-- No buy signals in a downtrend (EMA filter) ✓
-- No simultaneous buy + sell ✓
-- Stoploss is set and not too aggressive ✓
-- Bollinger Bands ordering (upper ≥ mid ≥ lower) ✓
-
-### Phase 4 — Paper Trading (2+ weeks minimum)
-```bash
-freqtrade trade \
-  --config bot/config.paper.json \
-  --strategy AIRSIStrategy \
-  --logfile bot/user_data/logs/bot.log
-```
-Virtual $1,000 USDT. Watch Telegram for all alerts. Only proceed to live trading after 2 consistent weeks.
-
----
-
-## 📱 Telegram Commands
-
-| Command | What it does |
+| Topic | Link |
 |---|---|
-| `/status` | Show open trades |
-| `/profit` | Current profit/loss |
-| `/balance` | Wallet balance |
-| `/stop` | **Emergency stop** the bot |
-| `/start` | Resume trading |
-| `/trades` | Last 10 closed trades |
+| Full setup walkthrough | [docs/quickstart.md](docs/quickstart.md) |
+| API keys explained | [docs/api-keys.md](docs/api-keys.md) |
+| Backtest → paper trade → live | [docs/testing.md](docs/testing.md) |
+| Strategy logic (entry/exit rules) | [docs/strategy.md](docs/strategy.md) |
+| Run AI locally with Ollama | [docs/local-ai-setup.md](docs/local-ai-setup.md) |
+| Start the React dashboard | [docs/dashboard.md](docs/dashboard.md) |
 
 ---
 
-## 🛡️ Fail-Safes
+## Project Structure
 
-| Risk | Protection |
-|---|---|
-| Network drop | Exponential backoff retry (5 attempts, up to 60s) |
-| Exchange API down | Freqtrade waits and retries automatically |
-| 3 consecutive losses | StoplossGuard pauses trading for 12 candles |
-| Portfolio drops 8% | MaxDrawdown protection halts new entries |
-| Bot crash | Global exception handler alerts you on Telegram |
-| Runaway losses | Hard 3.5% stoploss per trade |
-
----
-
-## 💰 Going Live (Micro-Investment)
-
-> ⚠️ Only after Phase 4 passes. Start with $5–$10 maximum.
-
-**Checklist before live trading:**
-- [ ] 2+ weeks of paper trading with positive results
-- [ ] Backtest Go/No-Go: all 4 checks pass
-- [ ] Telegram alerts working (tested manually)
-- [ ] Emergency `/stop` command tested
-- [ ] Exchange API key created with **NO withdrawal permissions**
-- [ ] `max_open_trades: 2` and `stake_amount: 5` in config.live.json
-
-```bash
-# Start live trading ($5 per trade, max 2 open = $10 total risk)
-freqtrade trade \
-  --config bot/config.live.json \
-  --strategy AIRSIStrategy
 ```
-
-**Fee minimization:**
-- Use limit orders (`"entry": "limit"`) — often free on Binance (maker)
-- Hold BNB in wallet for 25% fee discount
-- Trade high-liquidity pairs only (BTC/USDT, ETH/USDT)
-
----
-
-## 🐳 Docker (optional, run everything at once)
-
-```bash
-# Paper trading mode (safe)
-docker compose up
-
-# With local Ollama AI
-docker compose --profile local-ai up
-
-# Stop everything
-docker compose down
+airsi-trader/
+├── bot/                         # Core trading bot
+│   ├── strategies/              # Trading strategy (AIRSIStrategy)
+│   ├── ai_client.py             # AI commentary engine
+│   ├── telegram_notifier.py     # Telegram alert sender
+│   ├── config.paper.json        # Paper trading config
+│   ├── config.live.json         # Live trading config
+│   └── tests/                   # Unit tests (14 tests)
+├── scripts/                     # Helper scripts
+│   ├── activate.sh              # Activate venv with nix fix
+│   ├── download_data.py         # Download historical data
+│   ├── run_backtest.py          # Run backtest + summary
+│   └── setup_ollama.sh          # Install Ollama locally
+├── docs/                        # Detailed documentation
+├── artifacts/                   # Web UI
+│   ├── api-server/              # Express API proxy
+│   └── dashboard/               # React dashboard
+├── lib/                         # Shared TypeScript libraries
+├── docker/                      # Dockerfiles
+├── install.sh                   # Linux/macOS installer
+├── install.ps1                  # Windows installer
+└── docker-compose.yml           # Docker orchestration
 ```
 
 ---
 
-## 🗓️ 4-Week Roadmap
+## Troubleshooting
 
-| Week | Goal |
+| Problem | Solution |
 |---|---|
-| **Week 1** | Run `install.sh`, configure `.env`, download data, run first backtest |
-| **Week 2** | Tune strategy parameters, get AI working, verify Telegram alerts |
-| **Week 3** | Pass all unit tests, simulate crash scenario, read the logs |
-| **Week 4** | Paper trade 7+ days, review daily Telegram summaries, evaluate go-live checklist |
+| `command not found: python3` | Install Python 3.10+ from [python.org](https://python.org) |
+| `pip install` fails | Make sure `venv/` is activated (see step 3) |
+| `No module named freqtrade` | Run `pip install -r bot/requirements.txt` |
+| Telegram errors at startup | Leave `TELEGRAM_BOT_TOKEN` empty — bot runs without it |
+| Backtest shows 0 trades | The strategy conditions are strict. Tune `rsi_oversold` and `ema_period` in `AIRSIStrategy.py` |
+| `user_data` not found | Run `freqtrade create-userdir` |
+| Need help | Open an issue on GitHub |
 
 ---
 
 ## ⚠️ Disclaimer
 
-This software is for **educational purposes only**. Cryptocurrency trading carries significant risk. Past backtest performance does not guarantee future results. Never invest money you cannot afford to lose entirely. The authors are not responsible for any financial losses.
+**This project is for educational purposes only.**
+
+Cryptocurrency trading carries significant financial risk. You may lose all capital invested. This software is provided "as is" without warranty of any kind. Past performance does not guarantee future results. The authors assume no liability for any losses incurred.
+
+- Never trade with money you cannot afford to lose
+- Start with paper trading (`bot/config.paper.json`)
+- Test thoroughly before considering live trading
+- Use at your own risk
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).

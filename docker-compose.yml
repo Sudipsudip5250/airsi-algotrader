@@ -42,7 +42,7 @@ services:
   dashboard-api:
     build:
       context: .
-      dockerfile: Dockerfile.api
+      dockerfile: docker/api.Dockerfile
     container_name: dashboard-api
     restart: unless-stopped
     ports:

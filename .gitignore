@@ -1,72 +1,124 @@
-# See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
-
-# compiled output
-dist
-tmp
-out-tsc
-*.tsbuildinfo
-.expo
-.expo-shared
-
-# dependencies
-node_modules
-
-# IDEs and editors
-/.idea
-.project
-.classpath
-.c9/
-*.launch
-.settings/
-*.sublime-workspace
-
-# IDE - VSCode
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-
-# misc
-/.sass-cache
-/connect.lock
-/coverage
-/libpeerconnection.log
-npm-debug.log
-yarn-error.log
-testem.log
-/typings
-
-# System Files
-.DS_Store
-Thumbs.db
-
-.cursor/rules/nx-rules.mdc
-.github/instructions/nx.instructions.md
-
-# Replit
-.cache/
-.local/
-
-# Python
+# ── Dependencies (install fresh per device) ─────────────────────────────────
+node_modules/
 venv/
+.pnpm-store/
+.cache/pnpm/
+
+# ── Python ─────────────────────────────────────────────────────────────────
 __pycache__/
 *.pyc
 *.pyo
 .pytest_cache/
 .mypy_cache/
+*.egg-info/
+dist/
+*.whl
 
-# Environment / Secrets
+# ── Node / Build ───────────────────────────────────────────────────────────
+dist/
+tmp/
+out-tsc/
+*.tsbuildinfo
+.next/
+build/
+storybook-static/
+coverage/
+
+# ── Environment / Secrets (never commit) ───────────────────────────────────
 .env
 .env.local
 .env.production
+.env.development
+*.key
+*.pem
+*.crt
 
-# Freqtrade data (large — keep out of Git)
-bot/user_data/data/
-bot/user_data/backtest_results/
-bot/user_data/logs/
+# ── Freqtrade data (large, device-specific) ────────────────────────────────
+bot/user_data/data/*
+!bot/user_data/data/.gitkeep
+bot/user_data/backtest_results/*
+!bot/user_data/backtest_results/.gitkeep
+bot/user_data/logs/*
+!bot/user_data/logs/.gitkeep
+bot/user_data/hyperopts/*
+!bot/user_data/hyperopts/.gitkeep
+bot/user_data/notebooks/*
+!bot/user_data/notebooks/.gitkeep
+bot/user_data/plot/*
+!bot/user_data/plot/.gitkeep
+bot/user_data/*.json
+bot/user_data/*.db
 bot/user_data/*.sqlite
+bot/user_data/*.sqlite-shm
+bot/user_data/*.sqlite-wal
+bot/user_data/strategies/sample_*
+bot/user_data/models/*
+!bot/user_data/models/.gitkeep
+bot/user_data/freqaimodels/*
+!bot/user_data/freqaimodels/.gitkeep
 
-# Logs
-logs/
+# SQLite databases (dry-run trades, live trades)
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Freqtrade config backups
+bot/config.*.test.json
+bot/config.*.bak
+
+# ── Logs ───────────────────────────────────────────────────────────────────
+/logs/
 *.log
+
+# ── IDE / Editor ───────────────────────────────────────────────────────────
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+.c9/
+*.sublime-workspace
+*.sublime-project
+
+# ── OS files ───────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+
+# ── AI coding platforms (per-device, never commit) ────────────────────────
+.replit
+.replitignore
+.bolt/
+.lovable/
+.cursor/
+.windsurf/
+.kiro/
+.continue/
+
+# ── nix (platform-specific, regenerated) ─────────────────────────────────
+.cache/
+.local/
+.nix-profile/
+.config/configstore/
+
+# ── Misc ───────────────────────────────────────────────────────────────────
+/connect.lock
+/libpeerconnection.log
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+/typings
+
+# Local dev artifacts
+result-lib
+
+# Generated user data (freqtrade create-userdir at repo root)
+/user_data/

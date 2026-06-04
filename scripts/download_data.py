@@ -10,6 +10,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 
@@ -33,6 +34,7 @@ def main() -> None:
             "--timeframe", tf,
             "--days",    str(args.days),
             "--datadir", "bot/user_data/data",
+            "--userdir", os.path.expanduser("~/user_data"),
         ]
         print(f"\n📥  Downloading {tf} data for {args.days} days...")
         print("   " + " ".join(cmd))

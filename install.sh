@@ -69,6 +69,16 @@ else
     ok "Created ./venv"
 fi
 
+# Create convenience activation script (fixes nix/system lib conflicts)
+cat > scripts/activate.sh << 'ACTEOF'
+#!/usr/bin/env bash
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+source "${SCRIPT_DIR}/../venv/bin/activate"
+export LD_LIBRARY_PATH="${SCRIPT_DIR}/../venv/lib"
+ACTEOF
+chmod +x scripts/activate.sh
+ok "Created scripts/activate.sh"
+
 # shellcheck disable=SC1091
 source venv/bin/activate
 ok "Virtual environment activated"
@@ -90,8 +100,12 @@ if command -v node &>/dev/null; then
     if ! command -v pnpm &>/dev/null; then
         npm install -g pnpm --quiet
     fi
-    pnpm install --reporter=silent
-    ok "pnpm packages installed"
+    if [[ -f "package.json" ]]; then
+        pnpm install --reporter=silent
+        ok "pnpm packages installed"
+    else
+        warn "No package.json found — skipping pnpm install"
+    fi
 else
     warn "Node.js not found — skipping dashboard. Install from https://nodejs.org"
 fi
@@ -106,10 +120,12 @@ else
     cp .env.example .env
     ok "Created .env from template"
     echo ""
-    warn "IMPORTANT: Open .env and fill in:"
-    echo -e "     ${CYAN}TELEGRAM_BOT_TOKEN${NC}  ← from @BotFather on Telegram"
-    echo -e "     ${CYAN}TELEGRAM_CHAT_ID${NC}    ← from getUpdates API call"
-    echo -e "     ${CYAN}GROQ_API_KEY${NC}        ← free at console.groq.com"
+    warn "IMPORTANT: Open .env and fill in your API keys:"
+    echo -e "     ${CYAN}TELEGRAM_BOT_TOKEN${NC}    ← from @BotFather on Telegram"
+    echo -e "     ${CYAN}TELEGRAM_CHAT_ID${NC}      ← from getUpdates API call"
+    echo -e "     ${CYAN}GROQ_API_KEY${NC}          ← free at console.groq.com"
+    echo -e "     ${CYAN}OPENROUTER_API_KEY${NC}    ← free at openrouter.ai/keys"
+    echo -e "     ${CYAN}HUGGINGFACE_API_KEY${NC}   ← free at hf.co/settings/tokens"
 fi
 
 # ── Optional: Ollama ──────────────────────────────────────────────────────────
@@ -135,7 +151,7 @@ fi
 # ── Create required directories ───────────────────────────────────────────────
 
 mkdir -p bot/user_data/{data,logs,backtest_results}
-chmod +x scripts/setup_ollama.sh scripts/download_data.py scripts/run_backtest.py
+chmod +x scripts/activate.sh scripts/setup_ollama.sh scripts/download_data.py scripts/run_backtest.py
 
 # ── Done ───────────────────────────────────────────────────────────────────────
 
@@ -146,7 +162,8 @@ echo -e "${GREEN}╠════════════════════
 echo -e "${GREEN}║                                                      ║${NC}"
 echo -e "${GREEN}║  Next steps:                                         ║${NC}"
 echo -e "${GREEN}║  1. Edit .env with your Telegram/Groq keys           ║${NC}"
-echo -e "${GREEN}║  2. source venv/bin/activate                         ║${NC}"
+echo -e "${GREEN}║  2. source scripts/activate.sh                       ║${NC}"
+echo -e "${GREEN}║     or source venv/bin/activate                       ║${NC}"
 echo -e "${GREEN}║  3. python scripts/download_data.py                  ║${NC}"
 echo -e "${GREEN}║  4. python scripts/run_backtest.py                   ║${NC}"
 echo -e "${GREEN}║  5. cd bot && pytest tests/ -v                       ║${NC}"

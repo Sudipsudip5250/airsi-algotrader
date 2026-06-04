@@ -121,9 +121,11 @@ if (Test-Path ".env") {
     Print-OK "Created .env from template"
     Write-Host ""
     Write-Host "  ⚠  IMPORTANT: Open .env and fill in your keys:" -ForegroundColor Yellow
-    Write-Host "     - TELEGRAM_BOT_TOKEN  (from @BotFather)" -ForegroundColor Cyan
-    Write-Host "     - TELEGRAM_CHAT_ID    (from getUpdates API)" -ForegroundColor Cyan
-    Write-Host "     - GROQ_API_KEY        (from console.groq.com — free)" -ForegroundColor Cyan
+    Write-Host "     - TELEGRAM_BOT_TOKEN    (from @BotFather)" -ForegroundColor Cyan
+    Write-Host "     - TELEGRAM_CHAT_ID      (from getUpdates API)" -ForegroundColor Cyan
+    Write-Host "     - GROQ_API_KEY          (from console.groq.com — free)" -ForegroundColor Cyan
+    Write-Host "     - OPENROUTER_API_KEY    (from openrouter.ai/keys)" -ForegroundColor Cyan
+    Write-Host "     - HUGGINGFACE_API_KEY   (from hf.co/settings/tokens)" -ForegroundColor Cyan
 }
 
 # ── Optional: Ollama ──────────────────────────────────────────────────────────

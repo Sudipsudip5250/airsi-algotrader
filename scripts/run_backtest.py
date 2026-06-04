@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from datetime import date, timedelta
@@ -36,6 +37,7 @@ def main() -> None:
         "--timeframe", args.timeframe,
         "--timerange", timerange,
         "--datadir",   "bot/user_data/data",
+        "--userdir",   os.path.expanduser("~/user_data"),
         "--export",    "trades",
         "--export-filename", "bot/user_data/backtest_results/last_run.json",
     ]
