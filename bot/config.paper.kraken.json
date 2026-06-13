@@ -49,7 +49,7 @@
   },
 
   "exchange": {
-    "name": "binance",
+    "name": "kraken",
     "key": "",
     "secret": "",
     "ccxt_config": {},
@@ -63,7 +63,17 @@
     "pair_blacklist": [
       "BNB/BTC",
       "BTC/USD"
-    ]
+    ],
+    "ccxt_config": {
+      "options": {
+        "defaultType": "spot"
+      }
+    },
+    "ccxt_async_config": {
+      "options": {
+        "defaultType": "spot"
+      }
+    }
   },
 
   "pairlists": [

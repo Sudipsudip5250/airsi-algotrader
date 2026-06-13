@@ -49,7 +49,7 @@
   },
 
   "exchange": {
-    "name": "binance",
+    "name": "okx",
     "key": "",
     "secret": "",
     "ccxt_config": {},
@@ -63,7 +63,17 @@
     "pair_blacklist": [
       "BNB/BTC",
       "BTC/USD"
-    ]
+    ],
+    "ccxt_config": {
+      "options": {
+        "defaultType": "spot"
+      }
+    },
+    "ccxt_async_config": {
+      "options": {
+        "defaultType": "spot"
+      }
+    }
   },
 
   "pairlists": [
@@ -97,10 +107,10 @@
     "listen_port": 8080,
     "verbosity": "error",
     "enable_openapi": true,
-    "jwt_secret_key": "${FREQTRADE_JWT_SECRET}",
+    "jwt_secret_key": "change_this_to_64_random_chars_minimum_abcdefgh12345678",
     "CORS_origins": ["http://localhost:3000", "http://localhost:5173"],
-    "username": "${FREQTRADE_API_USER}",
-    "password": "${FREQTRADE_API_PASS}"
+    "username": "botuser",
+    "password": "changeme_to_something_strong"
   },
 
   "bot_name": "AIRSIBot",
