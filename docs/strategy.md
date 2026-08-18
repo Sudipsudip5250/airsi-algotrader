@@ -1,73 +1,44 @@
-# AIRSIStrategy
+# Unified strategy reference
 
-RSI + EMA + Bollinger Bands trading strategy for Freqtrade.
+AIRSI-Trader now contains two selectable, paper-testable Freqtrade strategies. They share the same execution, dashboard, exchange, notification, and safety infrastructure, but they represent different trading hypotheses.
 
----
+## Strategy profiles
 
-## Logic
+| Strategy | Timeframe | Trading idea | Configuration |
+|---|---:|---|---|
+| `AIRSIStrategy` | 15m | RSI/Bollinger mean reversion protected by an EMA50 uptrend filter | `bot/config.paper.json` |
+| `AlgoExplorerStrategy` | 1h | EMA9/EMA21 trend alignment with an RSI pullback and volume filter | `bot/config.paper.algo-explorer.json` |
 
-### Entry Conditions (all must be true)
+Run only one profile per Freqtrade process unless you intentionally isolate API ports and databases. Both profiles are paper-trading configurations by default.
 
-1. **Uptrend** — `close > EMA50` (50-period EMA filter)
-2. **Oversold** — `RSI < 35` (14-period RSI)
-3. **Volume spike** — `volume > volume_mean` (above average)
-4. **Below lower band** — `close < bb_lower` (Bollinger Bands)
+## AIRSIStrategy: RSI/Bollinger mean reversion
 
-### Exit Conditions (any one triggers)
+Entry requires all of the following conditions: price is above EMA50, RSI is below the configured oversold threshold, price is close to or below the lower Bollinger Band, and volume is at least half of its 20-candle average. Exit is triggered when RSI is above the configured overbought threshold and price has recovered to the Bollinger midline. The ROI table, stoploss, cooldown, and StoplossGuard remain active as additional controls.
 
-1. **Overbought** — `RSI > 70`
-2. **Above upper band** — `close > bb_upper`
-3. **ROI target reached** — `minimal_roi` table
+The strategy exposes EMA200 for analysis and future higher-timeframe filters. AI commentary is not called from the strategy loop and cannot block or authorize an order.
 
-### Risk Parameters
+## AlgoExplorerStrategy: trend pullback
 
-| Parameter | Value |
-|---|---|
-| Stoploss | -3.5% (`-0.035`) |
-| Trailing stop | On (offset: 2%, trigger: 1%) |
-| Max open trades | 2 |
-| Minimal ROI | 6% (immediate), 4% (30m), 2% (1h), 1% (2h) |
-| Startup candles | 60 (needs 60h of warmup data) |
+Entry requires EMA9 above EMA21, price above EMA50, RSI between 38 and 50 and rising, and volume ratio above 0.8. Exit is triggered by EMA9 falling below EMA21 or RSI moving above 70. It uses a one-hour timeframe, a 200-candle startup period, a 3% stoploss, and a trailing stop that activates after a 1.5% favorable move.
 
----
+The original Algo-Trader-Explorer implementation also contained a FinBERT/sample-headline sentiment field and an external mutable safety gate. Those pieces were not copied into the signal loop because sample headlines are not causal market data and mutable filesystem state makes backtests non-reproducible. If sentiment is reintroduced, it should arrive as a timestamped feature from a separate worker.
 
-## Customization
-
-Edit `bot/strategies/AIRSIStrategy.py`. Key parameters to tune:
-
-```python
-# RSI thresholds (default: entry < 35, exit > 70)
-rsi_entry = IntParameter(25, 45, default=35, space="buy")
-rsi_exit  = IntParameter(65, 85, default=70, space="sell")
-
-# EMA period (default: 50)
-ema_period = IntParameter(20, 100, default=50, space="buy")
-
-# Bollinger Bands (default: 20,2)
-bb_period = IntParameter(10, 30, default=20, space="buy")
-bb_std    = DecimalParameter(1.5, 3.0, default=2.0, space="buy")
-```
-
----
-
-## Hyperopt (Auto-Tuning)
+## Commands
 
 ```bash
-source scripts/activate.sh
-freqtrade hyperopt \
+# AIRSI mean reversion, paper mode
+freqtrade trade \
   --config bot/config.paper.json \
-  --strategy AIRSIStrategy \
-  --epochs 100 \
-  --spaces buy sell roi stoploss trailing
+  --strategy AIRSIStrategy
+
+# Algo Explorer trend pullback, paper mode
+freqtrade trade \
+  --config bot/config.paper.algo-explorer.json \
+  --strategy AlgoExplorerStrategy
+
+# Backtest each profile separately
+freqtrade backtesting --config bot/config.paper.json --strategy AIRSIStrategy
+freqtrade backtesting --config bot/config.paper.algo-explorer.json --strategy AlgoExplorerStrategy
 ```
 
----
-
-## Indicators Reference
-
-| Indicator | Source | Purpose |
-|---|---|---|
-| RSI (14) | Built-in `ta` library | Overbought/oversold |
-| EMA (50) | Built-in `ta` library | Trend direction |
-| BB (20, 2) | Built-in `ta` library | Volatility & support/resistance |
-| Volume SMA (24) | Manual calculation | Volume spike filter |
+Before live deployment, compare both strategies using identical pairs, fee assumptions, date ranges, slippage assumptions, and out-of-sample periods. A profitable backtest alone is not evidence that either strategy is safe for live capital.

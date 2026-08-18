@@ -217,3 +217,15 @@ Cryptocurrency trading carries significant financial risk. You may lose all capi
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+
+## Unified strategy profiles
+
+AIRSI-Trader now contains both the original AIRSI mean-reversion strategy and a migrated Algo-Trader-Explorer trend-pullback strategy. They share the same Freqtrade runtime, dashboard, notifications, and safety configuration:
+
+| Profile | Strategy | Paper configuration |
+|---|---|---|
+| AIRSI mean reversion | `AIRSIStrategy` | `bot/config.paper.json` |
+| Algo Explorer trend pullback | `AlgoExplorerStrategy` | `bot/config.paper.algo-explorer.json` |
+
+Use the profiles in separate paper-trading processes when comparing them. See `docs/strategy.md` for the entry/exit rules and validation guidance.
