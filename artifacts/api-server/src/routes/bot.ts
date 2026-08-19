@@ -10,13 +10,19 @@ import type { Request, Response } from "express";
 
 const router = Router();
 
-const FREQTRADE_URL = process.env["FREQTRADE_API_URL"] ?? "http://localhost:8080";
+const FREQTRADE_URL =
+  process.env["FREQTRADE_API_URL"] ?? "http://localhost:8080";
 const FT_USER = process.env["FREQTRADE_API_USER"];
 const FT_PASS = process.env["FREQTRADE_API_PASS"];
-const FT_AUTH = FT_USER && FT_PASS
-  ? Buffer.from(`${FT_USER}:${FT_PASS}`).toString("base64")
-  : null;
-const INTELLIGENCE_PATH = process.env["INTELLIGENCE_DECISION_PATH"] ?? "bot/user_data/market_intelligence.json";
+const FT_AUTH =
+  FT_USER && FT_PASS
+    ? Buffer.from(`${FT_USER}:${FT_PASS}`).toString("base64")
+    : null;
+const INTELLIGENCE_PATH =
+  process.env["INTELLIGENCE_DECISION_PATH"] ??
+  "bot/user_data/market_intelligence.json";
+const MEMORY_SUMMARY_PATH =
+  process.env["MEMORY_SUMMARY_PATH"] ?? "bot/user_data/trading_memory.json";
 
 /** Cached JWT token from Freqtrade */
 let ftToken: string | null = null;
@@ -29,12 +35,12 @@ async function getFtToken(): Promise<string | null> {
     const resp = await fetch(`${FREQTRADE_URL}/api/v1/token/login`, {
       method: "POST",
       headers: {
-        "Authorization": `Basic ${FT_AUTH}`,
+        Authorization: `Basic ${FT_AUTH}`,
         "Content-Type": "application/json",
       },
     });
     if (!resp.ok) return null;
-    const data = await resp.json() as { access_token?: string };
+    const data = (await resp.json()) as { access_token?: string };
     ftToken = data.access_token ?? null;
     ftTokenExpiry = Date.now() + 14 * 60 * 1000; // 14 min (token lasts 15)
     return ftToken;
@@ -43,12 +49,19 @@ async function getFtToken(): Promise<string | null> {
   }
 }
 
-async function ftGet(path: string): Promise<{ ok: boolean; data: unknown; status: number }> {
+async function ftGet(
+  path: string,
+): Promise<{ ok: boolean; data: unknown; status: number }> {
   const token = await getFtToken();
-  if (!token) return { ok: false, data: { error: "Bot offline or not configured" }, status: 503 };
+  if (!token)
+    return {
+      ok: false,
+      data: { error: "Bot offline or not configured" },
+      status: 503,
+    };
   try {
     const resp = await fetch(`${FREQTRADE_URL}/api/v1${path}`, {
-      headers: { "Authorization": `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}` },
     });
     const data = await resp.json();
     return { ok: resp.ok, data, status: resp.status };
@@ -70,9 +83,11 @@ router.get("/bot/status", async (_req: Request, res: Response) => {
 /** GET /api/bot/ping — lightweight health check */
 router.get("/bot/ping", async (_req: Request, res: Response) => {
   try {
-    const resp = await fetch(`${FREQTRADE_URL}/api/v1/ping`, { signal: AbortSignal.timeout(3000) });
+    const resp = await fetch(`${FREQTRADE_URL}/api/v1/ping`, {
+      signal: AbortSignal.timeout(3000),
+    });
     const data = await resp.json();
-    res.json({ online: true, ...data as object });
+    res.json({ online: true, ...(data as object) });
   } catch {
     res.json({ online: false });
   }
@@ -118,6 +133,17 @@ router.get("/bot/intelligence", async (_req: Request, res: Response) => {
     res.json({ available: true, decision });
   } catch {
     res.json({ available: false, decision: null });
+  }
+});
+
+/** GET /api/bot/memory — read-only persistent memory health and aggregate counts */
+router.get("/bot/memory", async (_req: Request, res: Response) => {
+  try {
+    const raw = await readFile(MEMORY_SUMMARY_PATH, "utf8");
+    const summary = JSON.parse(raw) as Record<string, unknown>;
+    res.json({ available: true, summary });
+  } catch {
+    res.json({ available: false, summary: null });
   }
 });
 

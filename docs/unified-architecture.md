@@ -13,7 +13,8 @@ Market data → AIRSIAlgoStrategy → Freqtrade protections → Exchange
                          │
                          ├─ Dashboard API → React dashboard
                          ├─ Telegram notifications
-                         └─ Advisory AI commentary
+                         ├─ Advisory AI commentary
+                         └─ Trading memory SQLite store (advisory veto only)
 
 Optional gcode-harness integration → read-only dashboard telemetry
 ```
@@ -34,14 +35,15 @@ AIRSI AlgoTrader owns execution, strategy signals, Freqtrade protections, exchan
 |---|---|---|
 | Freqtrade | Market data, orders, trade lifecycle, protections, persistence | Yes, within configured safeguards |
 | `AIRSIAlgoStrategy` | Deterministic indicators and entry/exit signals | Signals only |
-| Market intelligence worker | Public market/news collection and structured risk classification | No; writes only a short-lived veto snapshot |
+| Market intelligence worker | Public market/news collection, structured risk classification, and intelligence incidents | No; writes a short-lived veto snapshot and durable context event |
+| `trading_memory.py` | Restart-safe event history, trade-outcome reconciliation, similar-context lessons | No; only an evidence-gated entry veto |
 | `ai_client.py` | Optional commentary through provider fallback; never a trade gate | No |
 | Telegram notifier | Operator alerts and summaries | No |
 | Express API | Authenticated proxy to Freqtrade telemetry | No direct exchange access |
 | React dashboard | Status, positions, trades, performance, logs | No direct exchange access |
 | Docker Compose | Local paper stack, intelligence worker, and optional Ollama service | No |
 
-The intelligence worker is deliberately isolated from exchange credentials and the Freqtrade control API. Its output can only veto new live/dry-run entries; it cannot select pairs, change stake size, set leverage, or close positions.
+The intelligence worker is deliberately isolated from exchange credentials and the Freqtrade control API. Its output can only veto new live/dry-run entries; it cannot select pairs, change stake size, set leverage, or close positions. The memory store is local SQLite with WAL mode and idempotent event keys. It records environmental snapshots and realized outcomes but cannot rewrite strategy parameters. A memory veto requires a minimum sample count plus both poor expectancy and poor win rate for the exact pair/regime/signal context.
 
 ## Safety requirements
 

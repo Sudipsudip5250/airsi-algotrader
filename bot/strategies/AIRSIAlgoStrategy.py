@@ -13,12 +13,27 @@ remain outside this class.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from freqtrade.strategy import DecimalParameter, IntParameter, IStrategy
+
+try:
+    from trading_memory import MemoryStore
+except ImportError:  # pragma: no cover - only relevant to isolated Freqtrade loaders
+    MemoryStore = None  # type: ignore[assignment]
+
+try:
+    from freqtrade.persistence import Trade
+except ImportError:  # pragma: no cover - lightweight test stubs
+    Trade = None  # type: ignore[assignment]
+
+
+def _iso_datetime(value: datetime) -> str:
+    return value.astimezone(timezone.utc).isoformat()
 
 
 class AIRSIAlgoStrategy(IStrategy):
@@ -50,6 +65,8 @@ class AIRSIAlgoStrategy(IStrategy):
     range_mean_reversion_enabled = False
     live_intelligence_enabled = True
     intelligence_filename = "market_intelligence.json"
+    persistent_memory_enabled = True
+    memory_filename = "trading_memory.sqlite"
 
     rsi_oversold = IntParameter(25, 40, default=34, space="buy", optimize=True)
     rsi_overbought = IntParameter(60, 80, default=68, space="sell", optimize=True)
@@ -162,6 +179,140 @@ class AIRSIAlgoStrategy(IStrategy):
             return True
         except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
             return False
+
+    def _memory_store(self) -> MemoryStore | None:
+        if not self.persistent_memory_enabled or MemoryStore is None:
+            return None
+        try:
+            userdir = Path(str(self.config.get("user_data_dir", "bot/user_data")))
+            path = Path(os.getenv("MEMORY_DB_PATH", str(userdir / self.memory_filename)))
+            return MemoryStore(path)
+        except Exception:
+            return None
+
+    @staticmethod
+    def _memory_context(pair: str, entry_tag: str) -> tuple[str, str]:
+        regime = "bullish_trend" if entry_tag == "bullish_trend_pullback" else "range_mean_reversion"
+        return regime, entry_tag or "unknown"
+
+    def _memory_entry_allowed(self, pair: str, entry_tag: str) -> bool:
+        store = self._memory_store()
+        if store is None:
+            return True
+        regime, signal_tag = self._memory_context(pair, entry_tag)
+        try:
+            allowed, _lesson = store.entry_gate(pair=pair, regime=regime, signal_tag=signal_tag)
+            return allowed
+        except Exception:
+            # Existing deterministic/intelligence gates remain authoritative.
+            return True
+
+    def _memory_intelligence_context(self) -> dict:
+        try:
+            userdir = Path(str(self.config.get("user_data_dir", "bot/user_data")))
+            payload = json.loads((userdir / self.intelligence_filename).read_text())
+            return {
+                "snapshot_hash": payload.get("snapshot_hash", ""),
+                "risk_level": payload.get("risk_level", ""),
+                "news_sentiment": payload.get("news_sentiment", 0.0),
+                "news_confidence": payload.get("news_confidence", 0.0),
+            }
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            return {}
+
+    def bot_loop_start(self, current_time: datetime, **kwargs) -> None:
+        """Reconcile recent closed trades into memory in live/dry-run only."""
+        runmode = self.config.get("runmode")
+        runmode_value = getattr(runmode, "value", runmode)
+        if runmode_value in {"backtest", "hyperopt", "plot"} or Trade is None:
+            return
+        store = self._memory_store()
+        if store is None:
+            return
+        try:
+            recent = Trade.get_trades_proxy(is_open=False, close_date=current_time - timedelta(days=30))
+            for trade in recent:
+                reward = getattr(trade, "close_profit", None)
+                if reward is None:
+                    continue
+                pair = str(getattr(trade, "pair", ""))
+                entry_tag = str(getattr(trade, "enter_tag", "") or "unknown")
+                regime, signal_tag = self._memory_context(pair, entry_tag)
+                closed_at = getattr(trade, "close_date", None)
+                store.record_trade_outcome(
+                    str(getattr(trade, "id", "unknown")),
+                    pair=pair,
+                    regime=regime,
+                    signal_tag=signal_tag,
+                    reward=float(reward),
+                    features=self._memory_intelligence_context(),
+                    outcome={
+                        "close_profit": float(reward),
+                        "close_profit_abs": float(getattr(trade, "close_profit_abs", 0.0) or 0.0),
+                        "exit_reason": str(getattr(trade, "exit_reason", "") or "unknown"),
+                    },
+                    occurred_at=_iso_datetime(closed_at) if isinstance(closed_at, datetime) else _iso_datetime(current_time),
+                )
+        except Exception:
+            return
+
+    def confirm_trade_entry(
+        self,
+        pair: str,
+        order_type: str,
+        amount: float,
+        rate: float,
+        time_in_force: str,
+        current_time: datetime,
+        entry_tag: str | None,
+        side: str,
+        **kwargs,
+    ) -> bool:
+        """Apply only evidence-backed memory vetoes immediately before entry."""
+        tag = entry_tag or "unknown"
+        if side != "long":
+            return True
+        return self._memory_entry_allowed(pair, tag)
+
+    def order_filled(self, pair: str, trade, order, current_time: datetime, **kwargs) -> None:
+        """Persist entry context and realized outcome after fills; idempotence is in SQLite."""
+        store = self._memory_store()
+        if store is None:
+            return
+        try:
+            trade_id = str(getattr(trade, "id", "unknown"))
+            entry_tag = str(getattr(trade, "enter_tag", "") or "unknown")
+            regime, signal_tag = self._memory_context(pair, entry_tag)
+            order_side = str(getattr(order, "ft_order_side", ""))
+            entry_side = str(getattr(trade, "entry_side", "buy"))
+            if order_side == entry_side and bool(getattr(trade, "is_open", True)):
+                store.record_trade_entry(
+                    trade_id,
+                    pair=pair,
+                    regime=regime,
+                    signal_tag=signal_tag,
+                    features={"entry_rate": float(getattr(trade, "open_rate", 0.0) or 0.0), **self._memory_intelligence_context()},
+                    occurred_at=_iso_datetime(current_time),
+                )
+            elif not bool(getattr(trade, "is_open", True)):
+                reward = float(getattr(trade, "close_profit", 0.0) or 0.0)
+                store.record_trade_outcome(
+                    trade_id,
+                    pair=pair,
+                    regime=regime,
+                    signal_tag=signal_tag,
+                    reward=reward,
+                    features=self._memory_intelligence_context(),
+                    outcome={
+                        "close_profit": reward,
+                        "close_profit_abs": float(getattr(trade, "close_profit_abs", 0.0) or 0.0),
+                        "exit_reason": str(getattr(trade, "exit_reason", "") or "unknown"),
+                    },
+                    occurred_at=_iso_datetime(current_time),
+                )
+        except Exception:
+            # Memory must never crash or block the trading engine.
+            return
 
     def populate_exit_trend(self, dataframe: pd.DataFrame, metadata: dict) -> pd.DataFrame:
         dataframe["exit_long"] = 0

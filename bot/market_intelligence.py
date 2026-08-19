@@ -31,6 +31,11 @@ from urllib.parse import urlparse
 
 import requests
 
+try:
+    from trading_memory import MemoryStore
+except ImportError:  # pragma: no cover - allows isolated library imports
+    MemoryStore = None  # type: ignore[assignment]
+
 GDELT_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
 COINGECKO_URL = "https://api.coingecko.com/api/v3/coins/markets"
 COINGECKO_GLOBAL_URL = "https://api.coingecko.com/api/v3/global"
@@ -594,6 +599,24 @@ def create_decision() -> IntelligenceDecision:
     )
 
 
+def persist_intelligence_memory(decision: IntelligenceDecision, output_path: str | Path) -> None:
+    if MemoryStore is None:
+        return
+    try:
+        destination = Path(os.getenv("MEMORY_DB_PATH", str(Path(output_path).parent / "trading_memory.sqlite")))
+        MemoryStore(destination).record_intelligence_snapshot(
+            decision.snapshot_hash,
+            risk_level=decision.risk_level,
+            sentiment=decision.news_sentiment,
+            confidence=decision.news_confidence,
+            source_count=decision.source_count,
+            occurred_at=decision.generated_at,
+        )
+    except Exception:
+        # Memory is valuable but must never stop intelligence refreshes.
+        return
+
+
 def fail_safe_decision(errors: list[str]) -> IntelligenceDecision:
     generated = _now()
     expires = generated.timestamp() + 300
@@ -647,6 +670,7 @@ def main() -> int:
     while True:
         decision = create_decision()
         write_decision(decision, args.output)
+        persist_intelligence_memory(decision, args.output)
         print(json.dumps(asdict(decision), sort_keys=True, ensure_ascii=False))
         if args.once:
             return 0

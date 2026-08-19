@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import importlib
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
+
+from trading_memory import MemoryStore
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -126,3 +130,51 @@ def test_risk_parameters_are_conservative_and_complete():
     assert "0" in AIRSIAlgoStrategy.minimal_roi
     assert AIRSIAlgoStrategy.trailing_stop_positive_offset > AIRSIAlgoStrategy.trailing_stop_positive
     assert AIRSIAlgoStrategy.startup_candle_count >= 200
+
+
+def test_confirm_trade_entry_allows_fresh_memory(tmp_path):
+    strategy = build_strategy()
+    strategy.config["runmode"] = "dry_run"
+    strategy.config["user_data_dir"] = str(tmp_path)
+    assert strategy.confirm_trade_entry(
+        "BTC/USDT", "limit", 0.01, 30_000, "gtc", datetime.now(timezone.utc), "bullish_trend_pullback", "long"
+    ) is True
+
+
+def test_confirm_trade_entry_vetoes_repeated_poor_context(tmp_path, monkeypatch):
+    monkeypatch.setenv("MEMORY_MIN_SAMPLES", "3")
+    monkeypatch.setenv("MEMORY_MIN_MEAN_REWARD", "-0.01")
+    monkeypatch.setenv("MEMORY_MIN_WIN_RATE", "0.35")
+    path = tmp_path / "trading_memory.sqlite"
+    store = MemoryStore(path)
+    for trade_id in ("1", "2", "3"):
+        store.record_trade_outcome(
+            trade_id,
+            pair="BTC/USDT",
+            regime="bullish_trend",
+            signal_tag="bullish_trend_pullback",
+            reward=-0.03,
+        )
+
+    strategy = build_strategy()
+    strategy.config["runmode"] = "dry_run"
+    strategy.config["user_data_dir"] = str(tmp_path)
+    assert strategy.confirm_trade_entry(
+        "BTC/USDT", "limit", 0.01, 30_000, "gtc", datetime.now(timezone.utc), "bullish_trend_pullback", "long"
+    ) is False
+
+
+def test_memory_callbacks_fail_safe_when_store_unavailable(monkeypatch):
+    strategy = build_strategy()
+    strategy._memory_store = lambda: None
+    now = datetime.now(timezone.utc)
+    assert strategy.confirm_trade_entry("BTC/USDT", "limit", 0.01, 30_000, "gtc", now, "bullish_trend_pullback", "long") is True
+    strategy.order_filled("BTC/USDT", object(), object(), now)
+    strategy.bot_loop_start(now)
+
+
+def test_bot_loop_start_is_safe_when_trade_model_unavailable(monkeypatch):
+    strategy = build_strategy()
+    module = importlib.import_module("strategies.AIRSIAlgoStrategy")
+    monkeypatch.setattr(module, "Trade", None)
+    strategy.bot_loop_start(datetime.now(timezone.utc))

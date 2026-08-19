@@ -154,6 +154,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MarketIntelligence"
+
+  /bot/memory:
+    get:
+      operationId: botMemory
+      tags: [bot]
+      summary: Persistent trading-memory health and aggregate counts
+      responses:
+        "200":
+          description: Read-only memory summary; unavailable when the sidecar has not been initialized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradingMemorySummary"
 components:
   schemas:
     HealthStatus:
@@ -360,6 +373,30 @@ components:
         log_count:
           type: integer
       required: []
+
+    TradingMemorySummary:
+      type: object
+      properties:
+        available:
+          type: boolean
+        summary:
+          oneOf:
+            - $ref: "#/components/schemas/TradingMemoryCounts"
+            - type: "null"
+      required: [available, summary]
+
+    TradingMemoryCounts:
+      type: object
+      properties:
+        path:
+          type: string
+        event_count:
+          type: integer
+        outcome_count:
+          type: integer
+        lesson_count:
+          type: integer
+      required: [path, event_count, outcome_count, lesson_count]
 
     MarketIntelligence:
       type: object

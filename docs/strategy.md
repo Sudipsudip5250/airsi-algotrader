@@ -66,6 +66,14 @@ A negative news veto requires a sufficiently negative aggregate score, confidenc
 
 The model is not asked for a price target, buy/sell instruction, leverage, pair selection, or position size. Its output is combined with deterministic thresholds and can only veto new live/dry-run entries. It cannot close existing positions or authorize a trade. Missing, stale, malformed, or failed market intelligence causes a fail-closed veto; optional news or LLM failures fall back to deterministic market rules and are recorded. Backtests and hyperopt ignore this external layer so historical results remain reproducible.
 
+## Persistent trading memory
+
+The strategy now uses `bot/trading_memory.py` as a durable SQLite event store at `bot/user_data/trading_memory.sqlite`. The store survives process restarts and records intelligence snapshots, entry context, completed trade outcomes, exit reasons, reward values, strategy branch, pair, and regime. Event keys make writes idempotent, so a restart or repeated reconciliation does not duplicate a lesson.
+
+Memory is deliberately evidence-based rather than self-modifying. It does not rewrite indicators, thresholds, leverage, or position size. It only vetoes an exact pair/regime/signal context after at least `MEMORY_MIN_SAMPLES` completed outcomes show both poor average reward and a poor win rate. Positive results never override the deterministic strategy or intelligence gates. Missing or corrupted memory fails open for this advisory layer while missing or expired market intelligence still fails closed.
+
+The bot reconciles recent closed trades on live and dry-run loops, while backtests and hyperopt skip memory reads and writes. Keep the SQLite path on durable storage and back it up with the Freqtrade database when preserving operational history.
+
 Start it separately from the bot:
 
 ```bash
