@@ -19,7 +19,7 @@ There is one production strategy: `AIRSIAlgoStrategy`. It combines a bullish tre
 ## Project structure
 
 ```text
-airsi-trader/
+airsi-algotrader/
 ├── bot/
 │   ├── strategies/AIRSIAlgoStrategy.py
 │   ├── ai_client.py

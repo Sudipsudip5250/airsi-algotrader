@@ -4,7 +4,7 @@ AIRSI AlgoTrader uses one production Freqtrade strategy: `AIRSIAlgoStrategy`. It
 
 ## Why one hybrid strategy
 
-The former AIRSI approach was a Bollinger/RSI mean-reversion system. The former Algo-Trader approach was an EMA trend-pullback system. Neither is universally best. Mean reversion is more appropriate when the market is oscillating inside a range; trend pullbacks are more appropriate when price and moving averages show a sustained bullish regime.
+The mean-reversion research variant used Bollinger Bands and RSI. The trend-pullback research variant used EMA alignment and momentum. Neither is universally best. Mean reversion is more appropriate when the market is oscillating inside a range; trend pullbacks are more appropriate when price and moving averages show a sustained bullish regime.
 
 The unified strategy first classifies the regime and then activates only the matching entry branch:
 

@@ -16,8 +16,8 @@ This guide walks you through every step — from cloning the repo to running you
 ## Step 1: Clone
 
 ```bash
-git clone https://github.com/sudipsudip5250/airsi-trader.git
-cd airsi-trader
+git clone https://github.com/Sudipsudip5250/airsi-algotrader.git
+cd airsi-algotrader
 ```
 
 ---

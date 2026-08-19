@@ -24,8 +24,8 @@ The same public Binance spot data was used for BTC/USDT, ETH/USDT, SOL/USDT, and
 
 | Version | Trades | Total result | Max drawdown |
 |---|---:|---:|---:|
-| Former AIRSI 15m strategy | 767 | -129.12 USDT | 13.25% |
-| Former Algo-Trader 1h strategy | 95 | -11.44 USDT | 1.14% |
+| 15m mean-reversion baseline | 767 | -129.12 USDT | 13.25% |
+| 1h trend-pullback baseline | 95 | -11.44 USDT | 1.14% |
 | Initial unified 1h strategy | 113 | -7.61 USDT | 0.76% |
 | Current strict trend-only production default | 24 | **+2.43 USDT** | **0.17%** |
 
@@ -49,10 +49,8 @@ Do not add an LLM call to the strategy loop, increase leverage, widen the stoplo
 
 ## References
 
-[1]: https://github.com/Sudipsudip5250/AIRSI-Trader "AIRSI AlgoTrader source repository"
+[1]: https://github.com/Sudipsudip5250/airsi-algotrader "AIRSI AlgoTrader source repository"
 
-[2]: https://github.com/Sudipsudip5250/Algo-Trader-Explorer "Former Algo-Trader source repository"
+[2]: https://www.freqtrade.io/en/stable/backtesting/ "Freqtrade backtesting documentation"
 
-[3]: https://www.freqtrade.io/en/stable/backtesting/ "Freqtrade backtesting documentation"
-
-[4]: https://www.freqtrade.io/en/stable/protections/ "Freqtrade protections documentation"
+[3]: https://www.freqtrade.io/en/stable/protections/ "Freqtrade protections documentation"

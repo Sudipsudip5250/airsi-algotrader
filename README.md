@@ -14,7 +14,7 @@ Market data → AIRSIAlgoStrategy → Freqtrade risk controls → Paper/live exc
                                       └─ Advisory AI commentary
 ```
 
-AIRSI AlgoTrader is now one trading codebase. The former separate projects contributed two useful ideas: AIRSI’s RSI/Bollinger mean reversion and Algo-Trader’s EMA trend-pullback logic. They are now combined inside one strategy that chooses the appropriate signal branch from the current market regime.
+AIRSI AlgoTrader is now one trading codebase. The original research variants contributed two useful ideas: RSI/Bollinger mean reversion and EMA trend-pullback logic. They are now combined inside one strategy that chooses the appropriate signal branch from the current market regime.
 
 ## Strategy
 
@@ -89,7 +89,7 @@ Docker Compose starts the paper-trading stack. The optional Ollama service is en
 ## Repository layout
 
 ```text
-airsi-trader/
+airsi-algotrader/
 ├── bot/
 │   ├── strategies/AIRSIAlgoStrategy.py
 │   ├── ai_client.py

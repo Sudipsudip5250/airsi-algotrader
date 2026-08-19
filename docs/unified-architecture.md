@@ -2,7 +2,7 @@
 
 ## Product decision
 
-AIRSI AlgoTrader is the single unified trading project. The former AIRSI and Algo-Trader codebases contributed compatible trading concepts, but they should not remain as two independent bots. A single Freqtrade process, one strategy class, one set of configurations, one dashboard API, and one operational risk boundary are easier to test and safer to operate.
+AIRSI AlgoTrader is the single unified trading project. The original research variants contributed compatible trading concepts, but they should not remain as independent bots. A single Freqtrade process, one strategy class, one set of configurations, one dashboard API, and one operational risk boundary are easier to test and safer to operate.
 
 The unified strategy is `AIRSIAlgoStrategy`. Its production default uses a strict bullish trend-pullback branch; the range mean-reversion branch remains implemented behind `range_mean_reversion_enabled = False` for isolated research only. The strategy does not call AI providers, read mutable safety files, or make exchange/API calls while calculating candles.
 

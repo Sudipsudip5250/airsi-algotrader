@@ -34,7 +34,7 @@ class OpenAICompatibleClient:
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json",
                     "HTTP-Referer": os.getenv("OPENROUTER_SITE_URL", "http://localhost"),
-                    "X-Title": os.getenv("OPENROUTER_APP_NAME", "AIRSI Trader"),
+                    "X-Title": os.getenv("OPENROUTER_APP_NAME", "AIRSI AlgoTrader"),
                 },
                 json={
                     "model": self.model,
