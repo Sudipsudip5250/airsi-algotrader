@@ -58,4 +58,17 @@ freqtrade hyperopt \
   --spaces buy sell roi stoploss trailing
 ```
 
-The former FinBERT/sample-headline path is not part of the strategy loop. If news sentiment is added later, it should be produced by a separate timestamped worker and treated as an advisory feature with clear causal availability.
+## Live market intelligence
+
+The optional worker in `bot/market_intelligence.py` collects public Bitcoin and total-market movement, BTC funding rate, BTC open interest, GDELT article metadata, and any RSS feeds configured in `NEWS_RSS_URLS`. It sends only structured market-risk classification to the configured OpenAI-compatible model. The default model is `gpt-5-mini`, selected from the live model catalog for low-cost structured classification; replace it only after reviewing latency, cost, and quality.
+
+The model is not asked for a price target, buy/sell instruction, leverage, pair selection, or position size. Its output is combined with deterministic thresholds and can only veto new live/dry-run entries. It cannot close existing positions or authorize a trade. Missing, stale, malformed, or failed intelligence causes a fail-closed veto. Backtests and hyperopt ignore this external layer so historical results remain reproducible.
+
+Start it separately from the bot:
+
+```bash
+bash scripts/run_intelligence.sh
+bash scripts/run_bot.sh paper
+```
+
+The former FinBERT/sample-headline path is not part of the strategy loop. If additional sentiment is added later, it should remain a separate timestamped worker and be treated as an advisory risk feature with clear causal availability.

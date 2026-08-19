@@ -12,6 +12,10 @@ remain outside this class.
 
 from __future__ import annotations
 
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 from freqtrade.strategy import DecimalParameter, IntParameter, IStrategy
@@ -44,6 +48,8 @@ class AIRSIAlgoStrategy(IStrategy):
     # production default because it was the weaker branch in the real-data
     # comparison. Enable only after a separate out-of-sample review.
     range_mean_reversion_enabled = False
+    live_intelligence_enabled = True
+    intelligence_filename = "market_intelligence.json"
 
     rsi_oversold = IntParameter(25, 40, default=34, space="buy", optimize=True)
     rsi_overbought = IntParameter(60, 80, default=68, space="sell", optimize=True)
@@ -104,6 +110,11 @@ class AIRSIAlgoStrategy(IStrategy):
         dataframe["enter_long"] = 0
         dataframe["enter_tag"] = ""
 
+        # External intelligence can only veto new entries in live/dry-run
+        # operation. Backtests and hyperopt remain fully deterministic.
+        if not self._intelligence_allows_entry():
+            return dataframe
+
         mean_reversion = (
             self.range_mean_reversion_enabled
             & dataframe["range_regime"]
@@ -125,6 +136,24 @@ class AIRSIAlgoStrategy(IStrategy):
         dataframe.loc[mean_reversion, ["enter_long", "enter_tag"]] = [1, "range_mean_reversion"]
         dataframe.loc[trend_pullback, ["enter_long", "enter_tag"]] = [1, "bullish_trend_pullback"]
         return dataframe
+
+    def _intelligence_allows_entry(self) -> bool:
+        if not self.live_intelligence_enabled:
+            return True
+        runmode = self.config.get("runmode")
+        runmode_value = getattr(runmode, "value", runmode)
+        if runmode_value in {"backtest", "hyperopt", "plot"}:
+            return True
+        userdir = Path(str(self.config.get("user_data_dir", "bot/user_data")))
+        path = userdir / self.intelligence_filename
+        try:
+            decision = json.loads(path.read_text())
+            expires_at = datetime.fromisoformat(str(decision["expires_at"]))
+            if expires_at <= datetime.now(timezone.utc):
+                return False
+            return bool(decision["allow_long_entries"]) and decision.get("risk_level") not in {"high", "elevated"}
+        except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+            return False
 
     def populate_exit_trend(self, dataframe: pd.DataFrame, metadata: dict) -> pd.DataFrame:
         dataframe["exit_long"] = 0

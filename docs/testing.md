@@ -67,10 +67,21 @@ Tests include:
 
 ## Phase 4 — Paper Trading (2+ weeks minimum)
 
+Start the intelligence worker in one terminal:
+
+```bash
+source scripts/activate.sh
+bash scripts/run_intelligence.sh
+```
+
+Start the bot in a second terminal:
+
 ```bash
 source scripts/activate.sh
 bash scripts/run_bot.sh paper
 ```
+
+The intelligence worker can only veto new entries. It cannot place trades, select pairs, change stake size, set leverage, or close positions. Missing or expired snapshots fail closed.
 
 - Virtual $1,000 USDT wallet
 - Watch Telegram for alerts

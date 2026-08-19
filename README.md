@@ -26,7 +26,7 @@ The only production strategy is `AIRSIAlgoStrategy` in `bot/strategies/AIRSIAlgo
 | Range | Stable EMA50/EMA200 spread, oversold RSI, lower Bollinger Band, adequate volume | Research-only branch; disabled in production by default after weaker backtest results |
 | Bearish trend | No long entry | Avoid averaging into sustained weakness |
 
-The strategy is deterministic and contains no network calls, LLM calls, sample headlines, mutable safety files, or exchange side effects. AI is advisory-only and never authorizes a trade.
+The candle strategy itself remains deterministic and contains no network calls or LLM calls. A separate market-intelligence worker may veto new live/dry-run entries when deterministic market risk or structured news classification is elevated. It cannot place orders, choose pairs, set leverage, or increase position size. If its snapshot is missing or expired, the strategy fails closed.
 
 ## Quick start
 
@@ -46,7 +46,10 @@ cd ..
 python3 scripts/download_data.py --days 30
 python3 scripts/run_backtest.py --days 30
 
-# Start paper trading with the unified strategy
+# Terminal 1: refresh market/news intelligence
+bash scripts/run_intelligence.sh
+
+# Terminal 2: start paper trading with the unified strategy
 bash scripts/run_bot.sh paper
 ```
 

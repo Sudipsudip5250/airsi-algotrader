@@ -104,7 +104,15 @@ This tests the strategy against historical data. You'll see a summary table show
 
 ---
 
-## Step 8: Start Paper Trading
+## Step 8: Start Market Intelligence and Paper Trading
+
+In one terminal, refresh market/news intelligence:
+
+```bash
+bash scripts/run_intelligence.sh
+```
+
+In a second terminal, start paper trading:
 
 ```bash
 bash scripts/run_bot.sh paper

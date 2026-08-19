@@ -30,18 +30,21 @@ AIRSI AlgoTrader owns execution, strategy signals, Freqtrade protections, exchan
 
 ## Services
 
-| Service | Responsibility |
-|---|---|
-| Freqtrade | Market data, orders, trade lifecycle, protections, persistence |
-| `AIRSIAlgoStrategy` | Deterministic indicators and entry/exit signals |
-| `ai_client.py` | Optional commentary through provider fallback; never a trade gate |
-| Telegram notifier | Operator alerts and summaries |
-| Express API | Authenticated proxy to Freqtrade telemetry |
-| React dashboard | Status, positions, trades, performance, logs |
-| Docker Compose | Local paper stack and optional Ollama service |
+| Service | Responsibility | Trade authority |
+|---|---|---|
+| Freqtrade | Market data, orders, trade lifecycle, protections, persistence | Yes, within configured safeguards |
+| `AIRSIAlgoStrategy` | Deterministic indicators and entry/exit signals | Signals only |
+| Market intelligence worker | Public market/news collection and structured risk classification | No; writes only a short-lived veto snapshot |
+| `ai_client.py` | Optional commentary through provider fallback; never a trade gate | No |
+| Telegram notifier | Operator alerts and summaries | No |
+| Express API | Authenticated proxy to Freqtrade telemetry | No direct exchange access |
+| React dashboard | Status, positions, trades, performance, logs | No direct exchange access |
+| Docker Compose | Local paper stack, intelligence worker, and optional Ollama service | No |
+
+The intelligence worker is deliberately isolated from exchange credentials and the Freqtrade control API. Its output can only veto new live/dry-run entries; it cannot select pairs, change stake size, set leverage, or close positions.
 
 ## Safety requirements
 
 Paper mode remains the default. Production deployments must reject sample secrets, restrict CORS, keep the dashboard and Freqtrade API private or authenticated, and use exchange keys with trading permission only and withdrawals disabled. Live trading must be preceded by unit tests, realistic backtests, out-of-sample validation, and a sustained paper-trading period.
 
-The former FinBERT/sample-headline implementation is not part of the unified strategy because repeated sample headlines are not timestamped market data and model loading inside `populate_indicators` is operationally expensive. If sentiment is added later, it should be produced by a separate timestamped worker with a clear data contract.
+The former FinBERT/sample-headline implementation is not part of the unified strategy because repeated sample headlines are not timestamped market data and model loading inside `populate_indicators` is operationally expensive. The new `market_intelligence.py` worker provides the timestamped data contract. Missing market data or a stale/malformed snapshot fails closed; optional news-feed or LLM failures fall back to the deterministic market-risk rules and are recorded in the snapshot errors.

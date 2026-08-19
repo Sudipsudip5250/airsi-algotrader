@@ -35,6 +35,24 @@ services:
       timeout: 10s
       retries: 3
 
+  # ── Market intelligence worker ────────────────────────────────────
+  intelligence:
+    image: freqtradeorg/freqtrade:stable
+    container_name: airsi-algotrader-intelligence
+    restart: unless-stopped
+    volumes:
+      - ./bot:/freqtrade/user_data
+      - ./bot/market_intelligence.py:/freqtrade/project_scripts/market_intelligence.py:ro
+    environment:
+      - LLM_API_BASE=${LLM_API_BASE:-https://api.openai.com/v1}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_MODEL=${LLM_MODEL:-gpt-5-mini}
+      - NEWS_RSS_URLS=${NEWS_RSS_URLS:-}
+      - INTELLIGENCE_POLL_SECONDS=${INTELLIGENCE_POLL_SECONDS:-900}
+      - INTELLIGENCE_TTL_SECONDS=${INTELLIGENCE_TTL_SECONDS:-1800}
+      - INTELLIGENCE_DECISION_PATH=/freqtrade/user_data/market_intelligence.json
+    command: ["python3", "/freqtrade/project_scripts/market_intelligence.py", "--interval", "${INTELLIGENCE_POLL_SECONDS:-900}", "--output", "/freqtrade/user_data/market_intelligence.json"]
+
   # ── Dashboard API (Node.js proxy to Freqtrade) ────────────────────
   dashboard-api:
     build:
@@ -42,6 +60,8 @@ services:
       dockerfile: docker/api.Dockerfile
     container_name: airsi-algotrader-dashboard-api
     restart: unless-stopped
+    volumes:
+      - ./bot/user_data:/app/intelligence:ro
     ports:
       - "5000:5000"
     environment:
@@ -51,6 +71,7 @@ services:
       - FREQTRADE_API_PASS=${FREQTRADE_API_PASS:?Set FREQTRADE_API_PASS before starting the stack}
       - FREQTRADE_JWT_SECRET=${FREQTRADE_JWT_SECRET:?Set FREQTRADE_JWT_SECRET before starting the stack}
       - SESSION_SECRET=${SESSION_SECRET:?Set SESSION_SECRET before starting the stack}
+      - INTELLIGENCE_DECISION_PATH=/app/intelligence/market_intelligence.json
       - NODE_ENV=production
     depends_on:
       freqtrade:

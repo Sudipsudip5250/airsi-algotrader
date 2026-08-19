@@ -18,6 +18,8 @@ def build_strategy() -> AIRSIAlgoStrategy:
         "stake_currency": "USDT",
         "stake_amount": 50,
         "dry_run": True,
+        "runmode": "backtest",
+        "user_data_dir": "bot/user_data",
         "exchange": {"name": "binance"},
     }
     return strategy
@@ -87,6 +89,23 @@ def test_signal_columns_are_binary():
 
 def test_production_uses_strict_trend_branch_by_default():
     assert AIRSIAlgoStrategy.range_mean_reversion_enabled is False
+
+
+def test_live_intelligence_veto_fails_closed(tmp_path):
+    strategy = build_strategy()
+    strategy.config["runmode"] = "dry_run"
+    strategy.config["user_data_dir"] = str(tmp_path)
+    assert strategy._intelligence_allows_entry() is False
+
+
+def test_fresh_normal_intelligence_snapshot_allows_entries(tmp_path):
+    strategy = build_strategy()
+    strategy.config["runmode"] = "dry_run"
+    strategy.config["user_data_dir"] = str(tmp_path)
+    (tmp_path / "market_intelligence.json").write_text(
+        '{"expires_at":"2099-01-01T00:00:00+00:00","allow_long_entries":true,"risk_level":"normal"}'
+    )
+    assert strategy._intelligence_allows_entry() is True
 
 
 def test_risk_parameters_are_conservative_and_complete():

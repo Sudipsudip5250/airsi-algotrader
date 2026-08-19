@@ -4,6 +4,7 @@
  * and serves combined data to the frontend dashboard.
  */
 
+import { readFile } from "node:fs/promises";
 import { Router } from "express";
 import type { Request, Response } from "express";
 
@@ -15,6 +16,7 @@ const FT_PASS = process.env["FREQTRADE_API_PASS"];
 const FT_AUTH = FT_USER && FT_PASS
   ? Buffer.from(`${FT_USER}:${FT_PASS}`).toString("base64")
   : null;
+const INTELLIGENCE_PATH = process.env["INTELLIGENCE_DECISION_PATH"] ?? "bot/user_data/market_intelligence.json";
 
 /** Cached JWT token from Freqtrade */
 let ftToken: string | null = null;
@@ -106,6 +108,17 @@ router.get("/bot/logs", async (req: Request, res: Response) => {
   const limit = req.query["limit"] ?? 100;
   const result = await ftGet(`/logs?limit=${limit}`);
   res.status(result.status).json(result.data);
+});
+
+/** GET /api/bot/intelligence — latest read-only market-risk decision */
+router.get("/bot/intelligence", async (_req: Request, res: Response) => {
+  try {
+    const raw = await readFile(INTELLIGENCE_PATH, "utf8");
+    const decision = JSON.parse(raw) as Record<string, unknown>;
+    res.json({ available: true, decision });
+  } catch {
+    res.json({ available: false, decision: null });
+  }
 });
 
 /** GET /api/bot/config — active bot configuration (sanitized) */
