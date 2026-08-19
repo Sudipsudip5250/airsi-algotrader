@@ -69,10 +69,7 @@ Tests include:
 
 ```bash
 source scripts/activate.sh
-freqtrade trade \
-  --config bot/config.paper.json \
-  --strategy AIRSIStrategy \
-  --logfile bot/user_data/logs/bot.log
+bash scripts/run_bot.sh paper
 ```
 
 - Virtual $1,000 USDT wallet
@@ -88,12 +85,10 @@ freqtrade trade \
 - [ ] Telegram alerts working (tested manually)
 - [ ] Emergency `/stop` command tested
 - [ ] Exchange API key created with **NO withdrawal permissions**
-- [ ] `max_open_trades: 2` and `stake_amount: 5` in `config.live.json`
+- [ ] `max_open_trades: 2` and a reviewed stake amount in `config.live.json`
 
 ```bash
-# Start live trading ($5 per trade, max 2 open = $10 total risk)
+# Start live trading only after every checklist item is complete.
 source scripts/activate.sh
-freqtrade trade \
-  --config bot/config.live.json \
-  --strategy AIRSIStrategy
+bash scripts/run_bot.sh live
 ```

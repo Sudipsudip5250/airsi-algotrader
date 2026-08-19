@@ -1,37 +1,30 @@
 {
   "$schema": "https://schema.freqtrade.io/schema.json",
-
   "max_open_trades": 2,
   "stake_currency": "USDT",
   "stake_amount": 5,
   "tradable_balance_ratio": 0.99,
   "fiat_display_currency": "USD",
   "amend_last_stake_amount": true,
-
   "dry_run": false,
-
   "trading_mode": "spot",
   "margin_mode": "",
-
   "unfilledtimeout": {
     "entry": 10,
     "exit": 30,
     "unit": "minutes"
   },
-
   "entry_pricing": {
     "price_side": "same",
     "use_order_book": true,
     "order_book_top": 1,
     "price_last_balance": 0.0
   },
-
   "exit_pricing": {
     "price_side": "other",
     "use_order_book": true,
     "order_book_top": 1
   },
-
   "order_types": {
     "entry": "limit",
     "exit": "limit",
@@ -41,7 +34,6 @@
     "stoploss": "limit",
     "stoploss_on_exchange": true
   },
-
   "exchange": {
     "name": "binance",
     "key": "${EXCHANGE_API_KEY}",
@@ -54,13 +46,11 @@
     ],
     "pair_blacklist": []
   },
-
   "pairlists": [
     {
       "method": "StaticPairList"
     }
   ],
-
   "telegram": {
     "enabled": true,
     "token": "${TELEGRAM_BOT_TOKEN}",
@@ -77,7 +67,6 @@
       "protection_trigger_global": "on"
     }
   },
-
   "api_server": {
     "enabled": true,
     "listen_ip_address": "0.0.0.0",
@@ -85,18 +74,18 @@
     "verbosity": "error",
     "enable_openapi": false,
     "jwt_secret_key": "${FREQTRADE_JWT_SECRET}",
-    "CORS_origins": ["http://localhost:3000"],
+    "CORS_origins": [
+      "http://localhost:3000"
+    ],
     "username": "${FREQTRADE_API_USER}",
     "password": "${FREQTRADE_API_PASS}"
   },
-
-  "bot_name": "AIRSIBot-Live",
+  "bot_name": "AIRSIAlgoTrader-Live",
   "initial_state": "running",
   "force_entry_enable": false,
   "internals": {
     "process_throttle_secs": 5
   },
-
-  "strategy": "AIRSIStrategy",
+  "strategy": "AIRSIAlgoStrategy",
   "strategy_path": "bot/strategies/"
 }

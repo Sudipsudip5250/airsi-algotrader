@@ -1,46 +1,47 @@
-# Unified Trading Architecture
+# AIRSI AlgoTrader architecture
 
-## Decision
+## Product decision
 
-AIRSI-Trader is the canonical execution platform. Algo-Trader-Explorer contributes reusable ideas and optional AI integrations, while gcode-harness remains an external orchestration and analysis client.
+AIRSI AlgoTrader is the single unified trading project. The former AIRSI and Algo-Trader codebases contributed compatible trading concepts, but they should not remain as two independent bots. A single Freqtrade process, one strategy class, one set of configurations, one dashboard API, and one operational risk boundary are easier to test and safer to operate.
 
-The repositories are related at the **domain level**, but they are not one codebase. AIRSI and Algo both use Freqtrade and Python strategy modules, so those two should converge. gcode-harness is a large Rust agent runtime with TUI, sessions, providers, memory, and MCP support; it should not be compiled into the trading bot.
+The unified strategy is `AIRSIAlgoStrategy`. Its production default uses a strict bullish trend-pullback branch; the range mean-reversion branch remains implemented behind `range_mean_reversion_enabled = False` for isolated research only. The strategy does not call AI providers, read mutable safety files, or make exchange/API calls while calculating candles.
 
-## Runtime boundaries
+## Runtime boundary
 
 ```text
-                    read-only telemetry
- gcode-harness ───────────────────────────────────┐
-      │                                           │
-      │ optional prompts / analysis               ▼
-      └──────────────► AIRSI dashboard API ──► Freqtrade
-                         │                         │
-                         │                         ├─ paper/live config
-                         │                         ├─ AIRSIStrategy
-                         │                         └─ exchange adapter
+Market data → AIRSIAlgoStrategy → Freqtrade protections → Exchange
                          │
-                         └─ React dashboard / Telegram
+                         ├─ Dashboard API → React dashboard
+                         ├─ Telegram notifications
+                         └─ Advisory AI commentary
+
+Optional gcode-harness integration → read-only dashboard telemetry
 ```
 
-The gcode bridge is intentionally **read-only**. It can retrieve status, profit, performance, trades, balances, and sanitized configuration. It must not gain force-entry, force-exit, cancel-order, or configuration-write capabilities until a separate authenticated approval workflow exists.
+AIRSI AlgoTrader owns execution, strategy signals, Freqtrade protections, exchange configuration, dashboard data, and operator notifications. AI is a commentary service. The gcode-harness project, if connected, remains a separate agent and research client that can read telemetry and summarize results but cannot place, cancel, or modify trades.
 
-## What was consolidated
+## Strategy branches
 
-The canonical strategy now combines AIRSI's RSI/Bollinger mean-reversion logic with the EMA trend protection expected by the shared test contract and inspired by Algo-Trader-Explorer. It exposes `ema50` and `ema200`, initializes signal columns deterministically, and keeps the strategy hook free of side effects so backtests remain reproducible.
+| Branch | When it activates | Why it exists |
+|---|---|---|
+| `bullish_trend_pullback` | EMA9 > EMA21 > EMA50, EMA50/EMA200 spread above 0.5%, rising RSI pullback, sufficient volume | Production branch selected by the robustness review |
+| `range_mean_reversion` | EMA50/EMA200 spread is near flat, RSI is oversold, price is near the lower Bollinger Band, sufficient volume | Research-only branch; disabled by default because it reduced expectancy in the tested sample |
+| No entry | Bearish trend or incomplete warm-up data | Prevents long entries against sustained weakness |
 
-AIRSI's AI client now implements the fallback chain advertised in its environment template: Groq, OpenRouter, Hugging Face, and local Ollama. These providers are advisory-only and are never consulted to decide whether a trade may execute.
+## Services
 
-## What remains separate
+| Service | Responsibility |
+|---|---|
+| Freqtrade | Market data, orders, trade lifecycle, protections, persistence |
+| `AIRSIAlgoStrategy` | Deterministic indicators and entry/exit signals |
+| `ai_client.py` | Optional commentary through provider fallback; never a trade gate |
+| Telegram notifier | Operator alerts and summaries |
+| Express API | Authenticated proxy to Freqtrade telemetry |
+| React dashboard | Status, positions, trades, performance, logs |
+| Docker Compose | Local paper stack and optional Ollama service |
 
-Algo-Trader-Explorer's FinBERT pipeline is not placed directly inside the candle loop. Loading a transformer model during `populate_indicators` is expensive and its current strategy uses sample headlines rather than time-aligned news, which risks stale or non-causal signals. If news sentiment is added later, it should be refreshed by a scheduled worker and stored with a timestamp, source, symbol, and confidence before the strategy consumes it.
+## Safety requirements
 
-gcode-harness remains a general-purpose agent platform. It can orchestrate research, summarize telemetry, run backtests, and explain incidents through its wrapper/MCP surfaces, but it should not own exchange credentials or directly mutate Freqtrade state.
+Paper mode remains the default. Production deployments must reject sample secrets, restrict CORS, keep the dashboard and Freqtrade API private or authenticated, and use exchange keys with trading permission only and withdrawals disabled. Live trading must be preceded by unit tests, realistic backtests, out-of-sample validation, and a sustained paper-trading period.
 
-## Operational sequence
-
-1. Run AIRSI in paper mode with `bot/config.paper.json`.
-2. Run unit tests, backtests, and at least a multi-day paper-trading soak test.
-3. Expose the dashboard API only on a private network or through an authenticated reverse proxy.
-4. Give gcode-harness only the read-only adapter URL.
-5. Keep exchange keys trade-only, disable withdrawals, and keep live configuration separate from paper configuration.
-6. Promote to live trading only after reviewing the backtest assumptions, slippage, fees, and failure behavior.
+The former FinBERT/sample-headline implementation is not part of the unified strategy because repeated sample headlines are not timestamped market data and model loading inside `populate_indicators` is operationally expensive. If sentiment is added later, it should be produced by a separate timestamped worker with a clear data contract.

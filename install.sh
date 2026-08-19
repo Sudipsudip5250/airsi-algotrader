@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ══════════════════════════════════════════════════════════════════════════════
-# Crypto Trading Bot — Linux / macOS Installer
+# Crypto AIRSI AlgoTrader — Linux / macOS Installer
 # Run: bash install.sh
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -20,7 +20,7 @@ step() { echo -e "\n${YELLOW}[$1]${NC} $2"; }
 
 echo ""
 echo -e "${CYAN}╔══════════════════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║     Crypto Trading Bot — Linux/macOS Setup           ║${NC}"
+echo -e "${CYAN}║     Crypto AIRSI AlgoTrader — Linux/macOS Setup           ║${NC}"
 echo -e "${CYAN}╚══════════════════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -167,8 +167,6 @@ echo -e "${GREEN}║     or source venv/bin/activate                       ║${
 echo -e "${GREEN}║  3. python scripts/download_data.py                  ║${NC}"
 echo -e "${GREEN}║  4. python scripts/run_backtest.py                   ║${NC}"
 echo -e "${GREEN}║  5. cd bot && pytest tests/ -v                       ║${NC}"
-echo -e "${GREEN}║  6. freqtrade trade \\                                ║${NC}"
-echo -e "${GREEN}║        --config bot/config.paper.json \\              ║${NC}"
-echo -e "${GREEN}║        --strategy AIRSIStrategy                      ║${NC}"
+echo -e "${GREEN}║  6. bash scripts/run_bot.sh paper                    ║${NC}"
 echo -e "${GREEN}╚══════════════════════════════════════════════════════╝${NC}"
 echo ""

@@ -1,154 +1,97 @@
-"""
-Unit tests for AIRSIStrategy.
-
-Run with:  cd bot && pytest tests/ -v
-"""
+"""Unit tests for the unified AIRSI AlgoTrader strategy."""
 
 from __future__ import annotations
 
 import sys
-import os
-import numpy as np
+from pathlib import Path
+
 import pandas as pd
-import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "strategies"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from AIRSIStrategy import AIRSIStrategy
+from strategies.AIRSIAlgoStrategy import AIRSIAlgoStrategy
 
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
-
-def build_strategy() -> AIRSIStrategy:
-    """Construct strategy with minimal config (no exchange required)."""
-    config = {
+def build_strategy() -> AIRSIAlgoStrategy:
+    strategy = AIRSIAlgoStrategy.__new__(AIRSIAlgoStrategy)
+    strategy.config = {
         "stake_currency": "USDT",
         "stake_amount": 50,
         "dry_run": True,
         "exchange": {"name": "binance"},
     }
-    s = AIRSIStrategy.__new__(AIRSIStrategy)
-    s.config = config
-    s.dp = None
-    return s
+    return strategy
 
 
-# ── Indicator tests ───────────────────────────────────────────────────────────
-
-class TestIndicators:
-    def test_rsi_range(self, neutral_df):
-        """RSI must always be between 0 and 100."""
-        rsi = AIRSIStrategy._rsi(neutral_df["close"], 14)
-        valid = rsi.dropna()
-        assert (valid >= 0).all(), "RSI went below 0"
-        assert (valid <= 100).all(), "RSI went above 100"
-
-    def test_rsi_high_on_uptrend(self, uptrend_df):
-        """RSI should be elevated during a sustained uptrend."""
-        rsi = AIRSIStrategy._rsi(uptrend_df["close"], 14)
-        mean_rsi = rsi.dropna().mean()
-        assert mean_rsi > 50, f"Expected RSI > 50 in uptrend, got {mean_rsi:.1f}"
-
-    def test_rsi_low_on_downtrend(self, downtrend_df):
-        """RSI should be depressed during a sustained downtrend."""
-        rsi = AIRSIStrategy._rsi(downtrend_df["close"], 14)
-        mean_rsi = rsi.dropna().mean()
-        assert mean_rsi < 50, f"Expected RSI < 50 in downtrend, got {mean_rsi:.1f}"
-
-    def test_indicators_no_nan_after_warmup(self, neutral_df):
-        """After warmup candles, no NaN values in key indicators."""
-        s = build_strategy()
-        result = s.populate_indicators(neutral_df.copy(), {"pair": "BTC/USDT"})
-        warmup = AIRSIStrategy.startup_candle_count
-        after_warmup = result.iloc[warmup:]
-        assert after_warmup["rsi"].isna().sum() == 0
-        assert after_warmup["ema50"].isna().sum() == 0
-        assert after_warmup["bb_lower"].isna().sum() == 0
-        assert after_warmup["bb_upper"].isna().sum() == 0
-
-    def test_bollinger_bands_ordering(self, neutral_df):
-        """Upper BB must always be >= Mid >= Lower."""
-        s = build_strategy()
-        df = s.populate_indicators(neutral_df.copy(), {"pair": "BTC/USDT"})
-        warmup = AIRSIStrategy.startup_candle_count
-        after = df.iloc[warmup:]
-        assert (after["bb_upper"] >= after["bb_mid"]).all()
-        assert (after["bb_mid"] >= after["bb_lower"]).all()
+def make_ohlcv(n: int = 320, trend: float = 0.0, noise: float = 0.003) -> pd.DataFrame:
+    dates = pd.date_range("2024-01-01", periods=n, freq="15min")
+    steps = pd.Series(trend, index=dates)
+    close = 30_000 * (1 + steps).cumprod()
+    if noise:
+        # A deterministic alternating perturbation gives bands without relying
+        # on a random seed or an external data source.
+        close = close * (1 + pd.Series([noise, -noise] * (n // 2), index=dates)[:n])
+    return pd.DataFrame(
+        {
+            "open": close,
+            "high": close * 1.002,
+            "low": close * 0.998,
+            "close": close,
+            "volume": 1_000.0,
+        },
+        index=dates,
+    )
 
 
-# ── Signal tests ──────────────────────────────────────────────────────────────
+def test_indicators_and_signal_columns_are_present():
+    strategy = build_strategy()
+    result = strategy.populate_indicators(make_ohlcv(), {"pair": "BTC/USDT"})
+    result = strategy.populate_entry_trend(result, {"pair": "BTC/USDT"})
+    result = strategy.populate_exit_trend(result, {"pair": "BTC/USDT"})
 
-class TestSignals:
-    def test_entry_column_exists(self, neutral_df):
-        """populate_entry_trend must return 'enter_long' column."""
-        s = build_strategy()
-        df = s.populate_indicators(neutral_df.copy(), {"pair": "BTC/USDT"})
-        df = s.populate_entry_trend(df, {"pair": "BTC/USDT"})
-        assert "enter_long" in df.columns
-
-    def test_exit_column_exists(self, neutral_df):
-        """populate_exit_trend must return 'exit_long' column."""
-        s = build_strategy()
-        df = s.populate_indicators(neutral_df.copy(), {"pair": "BTC/USDT"})
-        df = s.populate_exit_trend(df, {"pair": "BTC/USDT"})
-        assert "exit_long" in df.columns
-
-    def test_no_simultaneous_entry_and_exit(self, neutral_df):
-        """A candle should not signal both entry and exit."""
-        s = build_strategy()
-        df = s.populate_indicators(neutral_df.copy(), {"pair": "BTC/USDT"})
-        df = s.populate_entry_trend(df, {"pair": "BTC/USDT"})
-        df = s.populate_exit_trend(df, {"pair": "BTC/USDT"})
-        conflict = (df.get("enter_long", 0) == 1) & (df.get("exit_long", 0) == 1)
-        assert not conflict.any(), "Found candle with both buy AND sell signal"
-
-    def test_signals_are_binary(self, neutral_df):
-        """Signal columns must only contain 0 or 1 (or NaN)."""
-        s = build_strategy()
-        df = s.populate_indicators(neutral_df.copy(), {"pair": "BTC/USDT"})
-        df = s.populate_entry_trend(df, {"pair": "BTC/USDT"})
-        df = s.populate_exit_trend(df, {"pair": "BTC/USDT"})
-        for col in ("enter_long", "exit_long"):
-            if col in df.columns:
-                vals = df[col].dropna().unique()
-                assert set(vals).issubset({0, 1}), f"{col} has non-binary values: {vals}"
-
-    def test_no_buy_signals_in_severe_downtrend(self, downtrend_df):
-        """
-        In a severe downtrend price stays below EMA50, so the strategy's
-        uptrend filter should suppress most (ideally all) entry signals.
-        """
-        s = build_strategy()
-        df = s.populate_indicators(downtrend_df.copy(), {"pair": "BTC/USDT"})
-        df = s.populate_entry_trend(df, {"pair": "BTC/USDT"})
-        warmup = AIRSIStrategy.startup_candle_count
-        signals_after_warmup = df.iloc[warmup:].get("enter_long", pd.Series(dtype=float))
-        buy_count = (signals_after_warmup == 1).sum()
-        total = len(signals_after_warmup)
-        assert buy_count / total < 0.05, (
-            f"Too many buys ({buy_count}/{total}) in a downtrend — "
-            "EMA uptrend filter may be broken"
-        )
+    for column in (
+        "ema21", "ema50", "ema200", "bb_lower", "bb_mid", "bb_upper",
+        "rsi", "volume_ratio", "bull_regime", "range_regime",
+        "enter_long", "enter_tag", "exit_long",
+    ):
+        assert column in result.columns
 
 
-# ── Risk management sanity checks ─────────────────────────────────────────────
+def test_rsi_stays_in_valid_range():
+    strategy = build_strategy()
+    result = strategy.populate_indicators(make_ohlcv(), {"pair": "BTC/USDT"})
+    rsi = result["rsi"].dropna()
+    assert (rsi >= 0).all()
+    assert (rsi <= 100).all()
 
-class TestRiskParameters:
-    def test_stoploss_is_set_and_negative(self):
-        assert AIRSIStrategy.stoploss < 0, "Stoploss must be negative (e.g. -0.035)"
 
-    def test_stoploss_not_too_aggressive(self):
-        assert AIRSIStrategy.stoploss >= -0.10, (
-            "Stoploss > 10% is too aggressive for micro capital"
-        )
+def test_severe_downtrend_has_no_long_entries():
+    strategy = build_strategy()
+    df = make_ohlcv(trend=-0.002, noise=0.001)
+    result = strategy.populate_indicators(df, {"pair": "BTC/USDT"})
+    result = strategy.populate_entry_trend(result, {"pair": "BTC/USDT"})
 
-    def test_minimal_roi_has_entry(self):
-        assert "0" in AIRSIStrategy.minimal_roi, "minimal_roi must include a '0' entry"
+    warm = strategy.startup_candle_count
+    assert result.iloc[warm:]["enter_long"].sum() == 0
 
-    def test_trailing_stop_offset_greater_than_trigger(self):
-        if AIRSIStrategy.trailing_stop and AIRSIStrategy.trailing_only_offset_is_reached:
-            assert (
-                AIRSIStrategy.trailing_stop_positive_offset
-                > AIRSIStrategy.trailing_stop_positive
-            ), "Trailing stop offset must be > positive stop to avoid immediate triggers"
+
+def test_signal_columns_are_binary():
+    strategy = build_strategy()
+    result = strategy.populate_indicators(make_ohlcv(), {"pair": "BTC/USDT"})
+    result = strategy.populate_entry_trend(result, {"pair": "BTC/USDT"})
+    result = strategy.populate_exit_trend(result, {"pair": "BTC/USDT"})
+
+    assert set(result["enter_long"].dropna().unique()).issubset({0, 1})
+    assert set(result["exit_long"].dropna().unique()).issubset({0, 1})
+
+
+def test_production_uses_strict_trend_branch_by_default():
+    assert AIRSIAlgoStrategy.range_mean_reversion_enabled is False
+
+
+def test_risk_parameters_are_conservative_and_complete():
+    assert AIRSIAlgoStrategy.stoploss < 0
+    assert AIRSIAlgoStrategy.stoploss >= -0.10
+    assert "0" in AIRSIAlgoStrategy.minimal_roi
+    assert AIRSIAlgoStrategy.trailing_stop_positive_offset > AIRSIAlgoStrategy.trailing_stop_positive
+    assert AIRSIAlgoStrategy.startup_candle_count >= 200

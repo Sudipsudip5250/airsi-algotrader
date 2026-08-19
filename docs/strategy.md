@@ -1,44 +1,61 @@
-# Unified strategy reference
+# AIRSI AlgoTrader strategy reference
 
-AIRSI-Trader now contains two selectable, paper-testable Freqtrade strategies. They share the same execution, dashboard, exchange, notification, and safety infrastructure, but they represent different trading hypotheses.
+AIRSI AlgoTrader uses one production Freqtrade strategy: `AIRSIAlgoStrategy`. It combines the strongest compatible ideas from both source projects without running two competing bots.
 
-## Strategy profiles
+## Why one hybrid strategy
 
-| Strategy | Timeframe | Trading idea | Configuration |
-|---|---:|---|---|
-| `AIRSIStrategy` | 15m | RSI/Bollinger mean reversion protected by an EMA50 uptrend filter | `bot/config.paper.json` |
-| `AlgoExplorerStrategy` | 1h | EMA9/EMA21 trend alignment with an RSI pullback and volume filter | `bot/config.paper.algo-explorer.json` |
+The former AIRSI approach was a Bollinger/RSI mean-reversion system. The former Algo-Trader approach was an EMA trend-pullback system. Neither is universally best. Mean reversion is more appropriate when the market is oscillating inside a range; trend pullbacks are more appropriate when price and moving averages show a sustained bullish regime.
 
-Run only one profile per Freqtrade process unless you intentionally isolate API ports and databases. Both profiles are paper-trading configurations by default.
+The unified strategy first classifies the regime and then activates only the matching entry branch:
 
-## AIRSIStrategy: RSI/Bollinger mean reversion
+| Market condition | Signal branch | Main indicators | Expected behavior |
+|---|---|---|---|
+| Confirmed bullish regime | `bullish_trend_pullback` | EMA9 > EMA21 > EMA50, EMA50/EMA200 spread > 0.5%, RSI 42–52 and rising, volume ratio > 1.0 | Buy selective pullbacks rather than chasing extended candles |
+| Confirmed range | `range_mean_reversion` (disabled by default) | EMA50/EMA200 spread within ±0.8%, RSI oversold, lower Bollinger Band, volume ratio > 0.5 | Research-only candidate; not used in production until it passes separate out-of-sample tests |
+| Sustained bearish regime | No long entry | Price/EMA alignment fails | Stay out rather than averaging into a downtrend |
 
-Entry requires all of the following conditions: price is above EMA50, RSI is below the configured oversold threshold, price is close to or below the lower Bollinger Band, and volume is at least half of its 20-candle average. Exit is triggered when RSI is above the configured overbought threshold and price has recovered to the Bollinger midline. The ROI table, stoploss, cooldown, and StoplossGuard remain active as additional controls.
+This design is a better fit for a single project because it preserves both ideas in one researchable class while allowing production to use only the branch that survived the initial robustness review. Execution, risk protection, logging, configuration, and dashboard behavior remain centralized.
 
-The strategy exposes EMA200 for analysis and future higher-timeframe filters. AI commentary is not called from the strategy loop and cannot block or authorize an order.
+## Entry and exit rules
 
-## AlgoExplorerStrategy: trend pullback
+The strategy uses a 1-hour timeframe and a 240-candle warm-up period. It calculates EMA21, EMA50, EMA200, RSI14, Bollinger Bands, and 20-candle volume ratio. All calculations are local and deterministic; there are no network requests, model calls, mutable files, or external side effects inside the Freqtrade strategy loop.
 
-Entry requires EMA9 above EMA21, price above EMA50, RSI between 38 and 50 and rising, and volume ratio above 0.8. Exit is triggered by EMA9 falling below EMA21 or RSI moving above 70. It uses a one-hour timeframe, a 200-candle startup period, a 3% stoploss, and a trailing stop that activates after a 1.5% favorable move.
+The production trend-pullback entry requires EMA9 > EMA21 > EMA50, an EMA50/EMA200 spread above 0.5%, RSI between 42 and 52 and rising, price within 0.5% of EMA21, and volume above its 20-candle average. The range mean-reversion entry remains implemented for research but is disabled by default because it was the weaker branch in the real-data comparison. Every production entry is long-only and is blocked in a sustained bearish regime.
 
-The original Algo-Trader-Explorer implementation also contained a FinBERT/sample-headline sentiment field and an external mutable safety gate. Those pieces were not copied into the signal loop because sample headlines are not causal market data and mutable filesystem state makes backtests non-reproducible. If sentiment is reintroduced, it should arrive as a timestamped feature from a separate worker.
+Exits occur through the configured ROI table, stoploss, trailing stop, or an explicit signal. The explicit signal exits when RSI is overbought with recovery toward the Bollinger midpoint, price reaches the upper Bollinger Band, or bearish EMA structure develops. Freqtrade protections add a cooldown, a stoploss guard, and a maximum-drawdown guard.
+
+## Risk defaults
+
+| Parameter | Default |
+|---|---:|
+| Timeframe | 1h |
+| Stoploss | -2.0% |
+| Trailing activation offset | 1.5% |
+| Trailing positive stop | 0.8% |
+| Stoploss guard | 3 losses in 96 candles, 24-candle pause |
+| Maximum drawdown guard | 10% over 192 candles |
+| Default mode | Paper trading |
+
+These values are safety-oriented starting points, not promises of profitability. They must be evaluated with fees, slippage, liquidity, and out-of-sample data before any live use.
 
 ## Commands
 
 ```bash
-# AIRSI mean reversion, paper mode
-freqtrade trade \
-  --config bot/config.paper.json \
-  --strategy AIRSIStrategy
+# Paper trading
+bash scripts/run_bot.sh paper
 
-# Algo Explorer trend pullback, paper mode
-freqtrade trade \
-  --config bot/config.paper.algo-explorer.json \
-  --strategy AlgoExplorerStrategy
+# Backtest
+python3 scripts/run_backtest.py --days 180
 
-# Backtest each profile separately
-freqtrade backtesting --config bot/config.paper.json --strategy AIRSIStrategy
-freqtrade backtesting --config bot/config.paper.algo-explorer.json --strategy AlgoExplorerStrategy
+# Hyperopt only after establishing a clean out-of-sample evaluation.
+# Render a config first, then run hyperopt against the rendered file.
+python3 scripts/render_config.py bot/config.paper.json bot/user_data/config.hyperopt.rendered.json
+freqtrade hyperopt \
+  --config bot/user_data/config.hyperopt.rendered.json \
+  --strategy AIRSIAlgoStrategy \
+  --strategy-path bot/strategies \
+  --epochs 100 \
+  --spaces buy sell roi stoploss trailing
 ```
 
-Before live deployment, compare both strategies using identical pairs, fee assumptions, date ranges, slippage assumptions, and out-of-sample periods. A profitable backtest alone is not evidence that either strategy is safe for live capital.
+The former FinBERT/sample-headline path is not part of the strategy loop. If news sentiment is added later, it should be produced by a separate timestamped worker and treated as an advisory feature with clear causal availability.

@@ -33,8 +33,8 @@ export default function Layout({ children }: { children: ReactNode }) {
             <Bot className="w-4 h-4 text-primary" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-sidebar-foreground leading-none">AIRSIBot</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Trading Dashboard</p>
+            <p className="text-sm font-semibold text-sidebar-foreground leading-none">AIRSI AlgoTrader</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Unified Trading Dashboard</p>
           </div>
         </div>
 

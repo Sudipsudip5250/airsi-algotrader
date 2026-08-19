@@ -1,231 +1,124 @@
-# AIRSI Trader
+# AIRSI AlgoTrader
 
-Educational crypto trading bot with AI commentary, Telegram alerts, and a React dashboard. Built on [Freqtrade](https://freqtrade.io).
+A unified educational crypto trading platform built on [Freqtrade](https://freqtrade.io), with a deterministic regime-aware strategy, paper/live configuration profiles, optional AI commentary, Telegram alerts, and a React dashboard.
 
----
+> **Important:** This project is educational software. Cryptocurrency trading carries significant risk. Start with paper trading, validate with realistic fees and slippage, and never use money you cannot afford to lose.
 
-## Quick Start
+## Product architecture
 
-```bash
-git clone https://github.com/sudipsudip5250/airsi-trader.git
-cd airsi-trader
-bash install.sh                  # one-click: installs everything
-cp .env.example .env             # create your config file
-source scripts/activate.sh       # activate Python environment
-cd bot && pytest tests/ -v       # verify 14/14 tests pass
+```text
+Market data → AIRSIAlgoStrategy → Freqtrade risk controls → Paper/live exchange
+                                      │
+                                      ├─ Dashboard API → React dashboard
+                                      ├─ Telegram notifications
+                                      └─ Advisory AI commentary
 ```
 
-> That's it. You're ready. See [First Time Test](#first-time-test) for what to run next.
+AIRSI AlgoTrader is now one trading codebase. The former separate projects contributed two useful ideas: AIRSI’s RSI/Bollinger mean reversion and Algo-Trader’s EMA trend-pullback logic. They are now combined inside one strategy that chooses the appropriate signal branch from the current market regime.
 
----
+## Strategy
 
-## Prerequisites
+The only production strategy is `AIRSIAlgoStrategy` in `bot/strategies/AIRSIAlgoStrategy.py`. It uses a 1-hour timeframe and a 240-candle warm-up period. The production default uses strict bullish pullbacks; the range branch remains available only for isolated research.
 
-| Requirement | Version | Check |
+| Regime | Entry branch | Purpose |
 |---|---|---|
-| **Python** | 3.10+ | `python3 --version` |
-| **Git** | any | `git --version` |
-| **Node.js** (optional) | 18+ | `node --version` — needed only for the dashboard |
+| Bullish trend | EMA9 > EMA21 > EMA50, EMA50/EMA200 spread > 0.5%, rising RSI pullback, volume above average | Participate only in selective controlled pullbacks |
+| Range | Stable EMA50/EMA200 spread, oversold RSI, lower Bollinger Band, adequate volume | Research-only branch; disabled in production by default after weaker backtest results |
+| Bearish trend | No long entry | Avoid averaging into sustained weakness |
 
-The `install.sh` script will check these and prompt you if anything is missing.  
-**Windows?** Run `install.ps1` as Administrator instead.
+The strategy is deterministic and contains no network calls, LLM calls, sample headlines, mutable safety files, or exchange side effects. AI is advisory-only and never authorizes a trade.
 
----
-
-## What This Bot Does
-
-This bot connects to Binance (paper or live), analyzes market data using multiple indicators, and executes trades based on a strategy. It can optionally use AI to generate commentary on market conditions.
-
-**How it works:**
-
-```
-Market Data (Binance) → Strategy (AIRSIStrategy) → Trade Decision
-                                                     ↓
-                              AI Commentary ← Telegram Alerts ← Trade Executed
-```
-
-**The AI fallback chain** (no key needed for the first one, but each next one needs its own key):
-```
-Groq (fastest) → OpenRouter (many models) → HuggingFace (free) → Ollama (local)
-```
-If one provider fails, the next is tried automatically.
-
----
-
-## Step-by-Step Guide
-
-### 1. Install Dependencies
+## Quick start
 
 ```bash
+# Install dependencies and create the Python environment
 bash install.sh
-```
 
-This will:
-- Create a Python virtual environment (`venv/`)
-- Install Python packages (freqtrade, pandas, etc.)
-- Install Node.js packages for the dashboard
-- Create the `scripts/activate.sh` helper
-
-### 2. Configure API Keys
-
-```bash
+# Create local configuration
 cp .env.example .env
-```
-
-Open `.env` in any text editor and fill in the keys you want to use.  
-**Minimum to get started:** you can skip all keys and just run paper trading — it works with public Binance data.
-
-| Key | Required for | How to get |
-|---|---|---|
-| `TELEGRAM_BOT_TOKEN` | Telegram alerts | [docs/api-keys.md](docs/api-keys.md) |
-| `TELEGRAM_CHAT_ID` | Telegram alerts | [docs/api-keys.md](docs/api-keys.md) |
-| `GROQ_API_KEY` | AI commentary (fastest) | [console.groq.com](https://console.groq.com) — free tier |
-| `OPENROUTER_API_KEY` | AI fallback | [openrouter.ai/keys](https://openrouter.ai/keys) |
-| `HUGGINGFACE_API_KEY` | AI fallback | [hf.co/settings/tokens](https://hf.co/settings/tokens) |
-| `EXCHANGE_API_KEY` | Live trading only | Binance API dashboard |
-
-### 3. Activate Environment
-
-```bash
 source scripts/activate.sh
-```
 
-Do this every time you open a new terminal. You should see `(venv)` appear in your prompt.
-
-### 4. Verify Setup
-
-```bash
+# Run unit tests
 cd bot && python3 -m pytest tests/ -v
-```
+cd ..
 
-All 14 tests should pass. If they don't, check [troubleshooting](#troubleshooting).
-
----
-
-## First Time Test
-
-After setup, run through this flow to make sure everything works:
-
-```bash
-# 1. Activate (if not already)
-source scripts/activate.sh
-
-# 2. Download 30 days of market data
+# Download historical data and run a backtest
 python3 scripts/download_data.py --days 30
-
-# 3. Run a backtest to see how the strategy performs
 python3 scripts/run_backtest.py --days 30
 
-# 4. Start paper trading (play money: $1000)
-freqtrade trade --config bot/config.paper.json --strategy AIRSIStrategy
+# Start paper trading with the unified strategy
+bash scripts/run_bot.sh paper
 ```
 
-**Paper trading** simulates real trades with virtual money. The bot:
-- Connects to Binance for live price data
-- Evaluates the strategy on every new candle
-- Logs virtual trades to `tradesv3.dryrun.sqlite`
-- Starts a REST API at `http://localhost:8080`
+The default paper profile uses `dry_run: true`, a virtual wallet, empty exchange credentials, and the shared dashboard API configuration. Do not change to live trading until the test, backtest, and paper-trading stages have been reviewed.
 
-Press `Ctrl+C` to stop.
+## Configuration profiles
 
----
+| Profile | Purpose | Default safety state |
+|---|---|---|
+| `bot/config.paper.json` | Binance paper trading | `dry_run: true` |
+| `bot/config.paper.kraken.json` | Kraken paper trading | `dry_run: true` |
+| `bot/config.paper.okx.json` | OKX paper trading | `dry_run: true` |
+| `bot/config.live.json` | Explicit live deployment profile | `dry_run: false`; use only after independent review |
 
-## Common Commands
+All profiles use `AIRSIAlgoStrategy`. Exchange keys are environment-injected; withdrawal permission must remain disabled.
 
-| Action | Command |
+## AI commentary
+
+The optional fallback chain is **Groq → OpenRouter → Hugging Face → Ollama → plain text**. Provider failures do not stop the bot, and the strategy does not depend on a model response. AI output is commentary for operators, not a trading signal.
+
+## Safety controls
+
+The platform uses Freqtrade protections, a negative stoploss, ROI limits, a cooldown period, a stoploss guard, and a maximum-drawdown guard. The dashboard and Freqtrade API must be kept on a private network or behind an authenticated reverse proxy. Replace all sample credentials and secrets before any non-local deployment.
+
+## Dashboard and services
+
+The React dashboard is served through the Node.js/Express API proxy. The standard local endpoints are:
+
+| Service | URL |
 |---|---|
-| Activate environment | `source scripts/activate.sh` |
-| Run tests | `cd bot && pytest tests/ -v` |
-| Download data | `python3 scripts/download_data.py --days 180` |
-| Run backtest | `python3 scripts/run_backtest.py --days 180` |
-| Start paper trading | `freqtrade trade --config bot/config.paper.json --strategy AIRSIStrategy` |
-| Start live trading | `freqtrade trade --config bot/config.live.json --strategy AIRSIStrategy` |
-| Check running bot | `tail -f user_data/logs/freqtrade.log` |
-| View trade history | `freqtrade trade --db-url sqlite:///tradesv3.dryrun.sqlite` |
+| Freqtrade API/UI | `http://localhost:8080` |
+| AIRSI dashboard API | `http://localhost:5000` |
+| Optional Ollama | `http://localhost:11434` |
 
----
+Docker Compose starts the paper-trading stack. The optional Ollama service is enabled with the `local-ai` profile.
 
-## Docs
+## Repository layout
 
-| Topic | Link |
-|---|---|
-| Full setup walkthrough | [docs/quickstart.md](docs/quickstart.md) |
-| API keys explained | [docs/api-keys.md](docs/api-keys.md) |
-| Backtest → paper trade → live | [docs/testing.md](docs/testing.md) |
-| Strategy logic (entry/exit rules) | [docs/strategy.md](docs/strategy.md) |
-| Run AI locally with Ollama | [docs/local-ai-setup.md](docs/local-ai-setup.md) |
-| Start the React dashboard | [docs/dashboard.md](docs/dashboard.md) |
-
----
-
-## Project Structure
-
-```
+```text
 airsi-trader/
-├── bot/                         # Core trading bot
-│   ├── strategies/              # Trading strategy (AIRSIStrategy)
-│   ├── ai_client.py             # AI commentary engine
-│   ├── telegram_notifier.py     # Telegram alert sender
-│   ├── config.paper.json        # Paper trading config
-│   ├── config.live.json         # Live trading config
-│   └── tests/                   # Unit tests (14 tests)
-├── scripts/                     # Helper scripts
-│   ├── activate.sh              # Activate venv with nix fix
-│   ├── download_data.py         # Download historical data
-│   ├── run_backtest.py          # Run backtest + summary
-│   └── setup_ollama.sh          # Install Ollama locally
-├── docs/                        # Detailed documentation
-├── artifacts/                   # Web UI
-│   ├── api-server/              # Express API proxy
-│   └── dashboard/               # React dashboard
-├── lib/                         # Shared TypeScript libraries
-├── docker/                      # Dockerfiles
-├── install.sh                   # Linux/macOS installer
-├── install.ps1                  # Windows installer
-└── docker-compose.yml           # Docker orchestration
+├── bot/
+│   ├── strategies/AIRSIAlgoStrategy.py
+│   ├── ai_client.py
+│   ├── telegram_notifier.py
+│   ├── config.paper*.json
+│   ├── config.live.json
+│   └── tests/
+├── artifacts/
+│   ├── api-server/
+│   └── dashboard/
+├── scripts/
+├── docs/
+├── docker/
+├── install.sh
+├── install.ps1
+├── docker-compose.yml
+└── .env.example
 ```
 
----
+## Documentation
 
-## Troubleshooting
-
-| Problem | Solution |
+| Topic | File |
 |---|---|
-| `command not found: python3` | Install Python 3.10+ from [python.org](https://python.org) |
-| `pip install` fails | Make sure `venv/` is activated (see step 3) |
-| `No module named freqtrade` | Run `pip install -r bot/requirements.txt` |
-| Telegram errors at startup | Leave `TELEGRAM_BOT_TOKEN` empty — bot runs without it |
-| Backtest shows 0 trades | The strategy conditions are strict. Tune `rsi_oversold` and `ema_period` in `AIRSIStrategy.py` |
-| `user_data` not found | Run `freqtrade create-userdir` |
-| Need help | Open an issue on GitHub |
-
----
-
-## ⚠️ Disclaimer
-
-**This project is for educational purposes only.**
-
-Cryptocurrency trading carries significant financial risk. You may lose all capital invested. This software is provided "as is" without warranty of any kind. Past performance does not guarantee future results. The authors assume no liability for any losses incurred.
-
-- Never trade with money you cannot afford to lose
-- Start with paper trading (`bot/config.paper.json`)
-- Test thoroughly before considering live trading
-- Use at your own risk
-
----
+| Strategy and regime selection | `docs/strategy.md` |
+| Setup | `docs/quickstart.md` |
+| Testing stages | `docs/testing.md` |
+| Dashboard | `docs/dashboard.md` |
+| API keys | `docs/api-keys.md` |
+| Local AI | `docs/local-ai-setup.md` |
+| Unified architecture | `docs/unified-architecture.md` |
+| Performance research and loss diagnosis | `docs/performance-research.md` |
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
-
-
-## Unified strategy profiles
-
-AIRSI-Trader now contains both the original AIRSI mean-reversion strategy and a migrated Algo-Trader-Explorer trend-pullback strategy. They share the same Freqtrade runtime, dashboard, notifications, and safety configuration:
-
-| Profile | Strategy | Paper configuration |
-|---|---|---|
-| AIRSI mean reversion | `AIRSIStrategy` | `bot/config.paper.json` |
-| Algo Explorer trend pullback | `AlgoExplorerStrategy` | `bot/config.paper.algo-explorer.json` |
-
-Use the profiles in separate paper-trading processes when comparing them. See `docs/strategy.md` for the entry/exit rules and validation guidance.
+MIT. Use, modify, and audit responsibly.

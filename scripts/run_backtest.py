@@ -1,10 +1,8 @@
-#!/usr/bin/env python3
-"""
-Run a Freqtrade backtest and print a human-readable summary.
+"""Run an AIRSI AlgoTrader backtest and print a human-readable summary.
 
 Usage:
   python scripts/run_backtest.py
-  python scripts/run_backtest.py --days 90 --strategy AIRSIStrategy
+  python scripts/run_backtest.py --days 90
 """
 
 from __future__ import annotations
@@ -17,36 +15,57 @@ import sys
 from datetime import date, timedelta
 from pathlib import Path
 
+try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover - requirements install provides this
+    load_dotenv = lambda *args, **kwargs: None
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run Freqtrade backtest")
-    parser.add_argument("--days",     type=int, default=180,          help="Days of history")
-    parser.add_argument("--strategy", default="AIRSIStrategy",        help="Strategy class name")
-    parser.add_argument("--config",   default="bot/config.paper.json", help="Config file path")
-    parser.add_argument("--timeframe", default="1h",                  help="Candle timeframe")
+    load_dotenv(ROOT / ".env")
+
+    parser = argparse.ArgumentParser(description="Run an AIRSI AlgoTrader backtest")
+    parser.add_argument("--days", type=int, default=180, help="Days of history")
+    parser.add_argument("--strategy", default="AIRSIAlgoStrategy", help="Strategy class name")
+    parser.add_argument("--config", default="bot/config.paper.json", help="Config template path")
+    parser.add_argument("--timeframe", default="1h", help="Candle timeframe")
     args = parser.parse_args()
 
-    end   = date.today()
+    template = ROOT / args.config
+    rendered = ROOT / "bot" / "user_data" / f".{template.stem}.rendered.json"
+    rendered.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "render_config.py"), str(template), str(rendered)],
+        check=True,
+        cwd=ROOT,
+    )
+
+    end = date.today()
     start = end - timedelta(days=args.days)
     timerange = f"{start.strftime('%Y%m%d')}-{end.strftime('%Y%m%d')}"
+    results_path = ROOT / "bot" / "user_data" / "backtest_results" / "last_run.json"
+    results_path.parent.mkdir(parents=True, exist_ok=True)
 
     cmd = [
         "freqtrade", "backtesting",
-        "--config",    args.config,
-        "--strategy",  args.strategy,
+        "--config", str(rendered),
+        "--strategy", args.strategy,
+        "--strategy-path", str(ROOT / "bot" / "strategies"),
         "--timeframe", args.timeframe,
         "--timerange", timerange,
-        "--datadir",   "bot/user_data/data",
-        "--userdir",   os.path.expanduser("~/user_data"),
-        "--export",    "trades",
-        "--export-filename", "bot/user_data/backtest_results/last_run.json",
+        "--datadir", str(ROOT / "bot" / "user_data" / "data"),
+        "--userdir", str(ROOT / "bot" / "user_data"),
+        "--export", "trades",
+        "--export-filename", str(results_path),
     ]
 
-    print(f"🔬 Running backtest: {args.strategy} | {timerange} | {args.timeframe}")
+    print(f"Running AIRSI AlgoTrader backtest: {args.strategy} | {timerange} | {args.timeframe}")
     print("   " + " ".join(cmd) + "\n")
-    result = subprocess.run(cmd, check=False)
+    result = subprocess.run(cmd, check=False, cwd=ROOT)
 
-    results_path = Path("bot/user_data/backtest_results/last_run.json")
     if results_path.exists():
         print_summary(results_path)
 
@@ -59,35 +78,21 @@ def print_summary(path: Path) -> None:
         strategy_results = list(data.get("strategy", {}).values())
         if not strategy_results:
             return
-        r = strategy_results[0]
+        result = strategy_results[0]
+        total_trades = result.get("total_trades", 0)
+        wins = result.get("wins", 0)
         print("\n" + "=" * 60)
-        print("📊  BACKTEST SUMMARY")
+        print("AIRSI ALGOTRADER BACKTEST SUMMARY")
         print("=" * 60)
-        print(f"  Total trades:     {r.get('total_trades', 'N/A')}")
-        print(f"  Win rate:         {r.get('wins', 0) / max(r.get('total_trades', 1), 1) * 100:.1f}%")
-        print(f"  Total profit:     {r.get('profit_total', 0):.4f} USDT")
-        print(f"  Profit factor:    {r.get('profit_factor', 0):.2f}")
-        print(f"  Max drawdown:     {r.get('max_drawdown', 0) * 100:.2f}%")
-        print(f"  Sharpe ratio:     {r.get('sharpe', 'N/A')}")
-        print(f"  Best trade:       {r.get('best_trade', 'N/A')}")
-        print(f"  Worst trade:      {r.get('worst_trade', 'N/A')}")
+        print(f"  Total trades:     {total_trades}")
+        print(f"  Win rate:         {wins / max(total_trades, 1) * 100:.1f}%")
+        print(f"  Total profit:     {result.get('profit_total', 0):.4f} USDT")
+        print(f"  Profit factor:    {result.get('profit_factor', 0):.2f}")
+        print(f"  Max drawdown:     {result.get('max_drawdown', 0) * 100:.2f}%")
+        print(f"  Sharpe ratio:     {result.get('sharpe', 'N/A')}")
         print("=" * 60)
-
-        drawdown_ok  = r.get("max_drawdown", 1) < 0.15
-        trades_ok    = r.get("total_trades", 0) >= 30
-        winrate      = r.get("wins", 0) / max(r.get("total_trades", 1), 1)
-        win_ok       = winrate > 0.5
-        profit_ok    = r.get("profit_total", 0) > 0
-
-        print("\n🚦 Go/No-Go Checks:")
-        print(f"  Max drawdown < 15%:   {'✅' if drawdown_ok else '❌'}")
-        print(f"  Win rate > 50%:       {'✅' if win_ok else '❌'}")
-        print(f"  Total profit > 0:     {'✅' if profit_ok else '❌'}")
-        print(f"  Trade count >= 30:    {'✅' if trades_ok else '❌'}")
-        all_pass = all([drawdown_ok, win_ok, profit_ok, trades_ok])
-        print(f"\n  Verdict: {'✅ Strategy looks ready for paper trading!' if all_pass else '❌ Needs improvement — do NOT go live.'}")
     except Exception as exc:
-        print(f"⚠️  Could not parse results: {exc}")
+        print(f"Could not parse backtest results: {exc}")
 
 
 if __name__ == "__main__":

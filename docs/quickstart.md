@@ -80,7 +80,7 @@ Do this every time you open a new terminal.
 cd bot && python3 -m pytest tests/ -v
 ```
 
-All 14 tests should pass with a green `PASSED` message. If any fail, re-run the installer or check the troubleshooting section in the README.
+All strategy and AI unit tests should pass with a green `PASSED` message. If any fail, inspect the first traceback and check the troubleshooting section in the README.
 
 ---
 
@@ -107,7 +107,7 @@ This tests the strategy against historical data. You'll see a summary table show
 ## Step 8: Start Paper Trading
 
 ```bash
-freqtrade trade --config bot/config.paper.json --strategy AIRSIStrategy
+bash scripts/run_bot.sh paper
 ```
 
 The bot starts with:

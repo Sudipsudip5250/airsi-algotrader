@@ -1,5 +1,5 @@
 {
-  "name": "workspace",
+  "name": "airsi-algotrader",
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
@@ -12,5 +12,6 @@
   "devDependencies": {
     "prettier": "^3.8.3",
     "typescript": "~5.9.3"
-  }
+  },
+  "description": "Unified AIRSI AlgoTrader crypto research and paper-trading platform"
 }

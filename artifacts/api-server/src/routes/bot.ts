@@ -10,16 +10,18 @@ import type { Request, Response } from "express";
 const router = Router();
 
 const FREQTRADE_URL = process.env["FREQTRADE_API_URL"] ?? "http://localhost:8080";
-const FT_USER      = process.env["FREQTRADE_API_USER"] ?? "botuser";
-const FT_PASS      = process.env["FREQTRADE_API_PASS"] ?? "changeme";
-
-const FT_AUTH = Buffer.from(`${FT_USER}:${FT_PASS}`).toString("base64");
+const FT_USER = process.env["FREQTRADE_API_USER"];
+const FT_PASS = process.env["FREQTRADE_API_PASS"];
+const FT_AUTH = FT_USER && FT_PASS
+  ? Buffer.from(`${FT_USER}:${FT_PASS}`).toString("base64")
+  : null;
 
 /** Cached JWT token from Freqtrade */
 let ftToken: string | null = null;
 let ftTokenExpiry = 0;
 
 async function getFtToken(): Promise<string | null> {
+  if (!FT_AUTH) return null;
   if (ftToken && Date.now() < ftTokenExpiry) return ftToken;
   try {
     const resp = await fetch(`${FREQTRADE_URL}/api/v1/token/login`, {

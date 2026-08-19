@@ -1,5 +1,5 @@
 # ══════════════════════════════════════════════════════════════════════════════
-# Crypto Trading Bot — Windows Installer
+# Crypto AIRSI AlgoTrader — Windows Installer
 # Run in PowerShell (as Administrator):
 #   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 #   .\install.ps1
@@ -9,7 +9,7 @@ $ErrorActionPreference = "Stop"
 
 Write-Host ""
 Write-Host "╔══════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "║     Crypto Trading Bot — Windows Setup               ║" -ForegroundColor Cyan
+Write-Host "║     Crypto AIRSI AlgoTrader — Windows Setup               ║" -ForegroundColor Cyan
 Write-Host "╚══════════════════════════════════════════════════════╝" -ForegroundColor Cyan
 Write-Host ""
 
@@ -170,7 +170,6 @@ Write-Host "║     python scripts/run_backtest.py                   ║" -Foreg
 Write-Host "║  4. Run unit tests:                                  ║" -ForegroundColor Green
 Write-Host "║     cd bot && pytest tests/ -v                       ║" -ForegroundColor Green
 Write-Host "║  5. Start paper trading:                             ║" -ForegroundColor Green
-Write-Host "║     freqtrade trade --config bot/config.paper.json   ║" -ForegroundColor Green
-Write-Host "║        --strategy AIRSIStrategy                      ║" -ForegroundColor Green
+Write-Host "║     bash scripts/run_bot.sh paper                    ║" -ForegroundColor Green
 Write-Host "╚══════════════════════════════════════════════════════╝" -ForegroundColor Green
 Write-Host ""

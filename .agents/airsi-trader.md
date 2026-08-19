@@ -1,77 +1,66 @@
-# AIRSI Trader — AI Agent Context
-
 ## Project Overview
-Educational micro-budget automated crypto trading bot.
-Built with Freqtrade (Python), AI providers (Groq → OpenRouter → HuggingFace → Ollama), Telegram alerts, and a React dashboard.
 
-## Tech Stack
-- **Trading**: Freqtrade (Python), strategy RSI + EMA + Bollinger Bands
-- **AI**: Groq (free cloud) → OpenRouter → HuggingFace → Ollama (local fallback)
-- **Notifications**: Telegram Bot API
-- **Backend**: Node.js + Express (proxies Freqtrade REST API)
-- **Frontend**: React 19 + Vite + Recharts + Tailwind
-- **Build**: pnpm workspaces, TypeScript 5.9, esbuild
+AIRSI AlgoTrader is an educational crypto trading platform built on Freqtrade, optional AI commentary providers, Telegram alerts, a Node.js/Express API proxy, and a React dashboard.
 
-## Project Structure
-```
+## Core design rule
+
+There is one production strategy: `AIRSIAlgoStrategy`. It combines a bullish trend-pullback branch with a range mean-reversion branch. Do not reintroduce separate competing bot runtimes or call external services from Freqtrade strategy methods.
+
+## Tech stack
+
+- **Trading:** Freqtrade and Python
+- **Strategy:** `bot/strategies/AIRSIAlgoStrategy.py`
+- **AI commentary:** Groq → OpenRouter → Hugging Face → Ollama → plain text
+- **Notifications:** Telegram Bot API
+- **Backend:** Node.js + Express proxy for the Freqtrade REST API
+- **Frontend:** React + Vite + Recharts + Tailwind
+- **Build:** pnpm workspaces, TypeScript, esbuild
+
+## Project structure
+
+```text
 airsi-trader/
-├── bot/                          # Python trading bot
-│   ├── strategies/               # Freqtrade strategies
-│   │   └── AIRSIStrategy.py      # RSI + EMA + BB strategy
-│   ├── ai_client.py              # AI integration (multi-provider fallback)
-│   ├── telegram_notifier.py      # Telegram push notifications
-│   ├── config.paper.json         # Paper trading config
-│   ├── config.live.json          # Live trading config
-│   └── tests/                    # Pytest unit tests
+├── bot/
+│   ├── strategies/AIRSIAlgoStrategy.py
+│   ├── ai_client.py
+│   ├── telegram_notifier.py
+│   ├── config.paper*.json
+│   ├── config.live.json
+│   └── tests/
 ├── artifacts/
-│   ├── api-server/               # Express API (proxies Freqtrade)
-│   └── dashboard/                # React dashboard
+│   ├── api-server/
+│   └── dashboard/
 ├── scripts/
-│   ├── download_data.py          # Download historical data
-│   ├── run_backtest.py           # Run backtest + Go/No-Go
-│   └── setup_ollama.sh           # Install Ollama
-├── docs/                         # Documentation
-│   ├── api-keys.md               # How to get API keys
-│   ├── quickstart.md             # Commands reference
-│   ├── testing.md                # 4-phase testing pipeline
-│   ├── local-ai-setup.md         # Ollama on VPS
-│   ├── dashboard.md              # Dashboard & Docker
-│   └── strategy.md               # Strategy details
-├── scripts/activate.sh            # Venv activation (nix fix)
-├── install.sh                    # Linux/macOS installer
-├── install.ps1                   # Windows installer
-├── docker-compose.yml            # Docker setup
-└── .env.example                  # Environment template
+├── docs/
+├── docker/
+├── install.sh
+├── install.ps1
+├── docker-compose.yml
+└── .env.example
 ```
 
-## Key Commands (for AI to reference)
+## Required workflow
 
-### Setup
 ```bash
-bash install.sh                          # First-time setup
-cp .env.example .env                     # Create env file
-source venv/bin/activate                 # Activate Python
+bash install.sh
+cp .env.example .env
+source scripts/activate.sh
+cd bot && python3 -m pytest tests/ -v
+python3 scripts/download_data.py --days 30
+python3 scripts/run_backtest.py --days 30 --strategy AIRSIAlgoStrategy
+freqtrade trade --config bot/config.paper.json --strategy AIRSIAlgoStrategy
 ```
 
-### Testing Pipeline
-```bash
-cd bot && python3 -m pytest tests/ -v   # Unit tests
-python3 scripts/download_data.py         # Download data
-python3 scripts/run_backtest.py          # Backtest
-freqtrade trade --config bot/config.paper.json --strategy AIRSIStrategy  # Paper trade
-```
+Run paper mode before any live mode. Use realistic fees, slippage, liquidity, and out-of-sample periods when assessing performance.
 
-### AI Provider Fallback Chain
-The bot tries providers in order: Groq → OpenRouter → HuggingFace → Ollama → plain text.
-Define keys in `.env` (see `docs/api-keys.md`).
+## Strategy behavior
 
-## Strategy Entry/Exit Conditions
-- **Entry**: RSI < 35 AND close > EMA50 AND close ≤ BB lower AND volume > average
-- **Exit**: RSI > 68 AND close ≥ BB upper (or ROI/stoploss)
-- **Risk**: 3.5% stoploss, trailing stop, max 2 open trades, $50 per trade
+The strategy uses EMA21, EMA50, EMA200, RSI14, Bollinger Bands, and volume ratio. In a bullish regime it looks for a rising RSI pullback near EMA21. In a range it looks for oversold RSI near the lower Bollinger Band. In a bearish regime it does not open long positions.
 
-## Environment Notes
-- Python 3.11+ required, Node.js 18+
-- On Replit: use `scripts/activate.sh` instead of `venv/bin/activate` (sets LD_LIBRARY_PATH)
-- `.env` is git-ignored — never commit real keys
-- Freqtrade user_data goes in `~/user_data/`
+## Safety rules
+
+Do not add network requests, LLM inference, mutable filesystem gates, or exchange writes to `populate_indicators`, `populate_entry_trend`, or `populate_exit_trend`. AI is advisory-only. Keep live exchange keys trade-only and withdrawal-disabled. Never expose Freqtrade or the dashboard API publicly without strong authentication and restricted CORS.
+
+## Environment notes
+
+Python 3.11+ and Node.js 18+ are expected. `.env` is git-ignored; never place real credentials in tracked files. Freqtrade data, logs, and databases belong under the configured `bot/` user-data volume.

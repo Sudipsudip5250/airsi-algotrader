@@ -1,11 +1,11 @@
 version: "3.9"
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Crypto Trading Bot — Docker Compose
+# AIRSI AlgoTrader — Docker Compose
 #
 # Usage:
 #   Paper trading:  docker compose up
-#   Live trading:   FREQTRADE_CONFIG=config.live.json docker compose up
+#   Live trading:   FREQTRADE_CONFIG_TEMPLATE=./bot/config.live.json docker compose up
 #   Stop:           docker compose down
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -14,24 +14,21 @@ services:
   # ── Freqtrade Bot ─────────────────────────────────────────────────
   freqtrade:
     image: freqtradeorg/freqtrade:stable
-    container_name: freqtrade-bot
+    container_name: airsi-algotrader-freqtrade
     restart: unless-stopped
     volumes:
       - ./bot:/freqtrade/user_data
-      - ./bot/config.paper.json:/freqtrade/config.json:ro
+      - ${FREQTRADE_CONFIG_TEMPLATE:-./bot/config.paper.json}:/freqtrade/config.template.json:ro
       - ./bot/strategies:/freqtrade/user_data/strategies:ro
+      - ./scripts:/freqtrade/project_scripts:ro
+      - ./docker/freqtrade-entrypoint.sh:/freqtrade/project_scripts/freqtrade-entrypoint.sh:ro
     ports:
       - "8080:8080"    # Freqtrade REST API & UI
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
       - GROQ_API_KEY=${GROQ_API_KEY}
-    command: >
-      trade
-      --config /freqtrade/config.json
-      --strategy AIRSIStrategy
-      --strategy-path /freqtrade/user_data/strategies
-      --logfile /freqtrade/user_data/logs/freqtrade.log
+    entrypoint: ["/bin/bash", "/freqtrade/project_scripts/freqtrade-entrypoint.sh"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/ping"]
       interval: 30s
@@ -43,17 +40,17 @@ services:
     build:
       context: .
       dockerfile: docker/api.Dockerfile
-    container_name: dashboard-api
+    container_name: airsi-algotrader-dashboard-api
     restart: unless-stopped
     ports:
       - "5000:5000"
     environment:
       - PORT=5000
       - FREQTRADE_API_URL=http://freqtrade:8080
-      - FREQTRADE_API_USER=${FREQTRADE_API_USER:-botuser}
-      - FREQTRADE_API_PASS=${FREQTRADE_API_PASS:-changeme}
-      - FREQTRADE_JWT_SECRET=${FREQTRADE_JWT_SECRET}
-      - SESSION_SECRET=${SESSION_SECRET}
+      - FREQTRADE_API_USER=${FREQTRADE_API_USER:?Set FREQTRADE_API_USER before starting the stack}
+      - FREQTRADE_API_PASS=${FREQTRADE_API_PASS:?Set FREQTRADE_API_PASS before starting the stack}
+      - FREQTRADE_JWT_SECRET=${FREQTRADE_JWT_SECRET:?Set FREQTRADE_JWT_SECRET before starting the stack}
+      - SESSION_SECRET=${SESSION_SECRET:?Set SESSION_SECRET before starting the stack}
       - NODE_ENV=production
     depends_on:
       freqtrade:
@@ -62,7 +59,7 @@ services:
   # ── Ollama (optional local AI) ────────────────────────────────────
   ollama:
     image: ollama/ollama:latest
-    container_name: ollama
+    container_name: airsi-algotrader-ollama
     restart: unless-stopped
     ports:
       - "11434:11434"

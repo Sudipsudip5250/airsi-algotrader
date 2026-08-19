@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
-  title: Api
+  title: AIRSI AlgoTrader API
   version: 0.1.0
-  description: Trading Bot Dashboard API
+  description: AIRSI AlgoTrader Dashboard API
 servers:
   - url: /api
     description: Base API path
