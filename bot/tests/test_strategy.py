@@ -108,6 +108,18 @@ def test_fresh_normal_intelligence_snapshot_allows_entries(tmp_path):
     assert strategy._intelligence_allows_entry() is True
 
 
+def test_pair_specific_news_veto_is_narrower_than_global_veto(tmp_path):
+    strategy = build_strategy()
+    strategy.config["runmode"] = "dry_run"
+    strategy.config["user_data_dir"] = str(tmp_path)
+    (tmp_path / "market_intelligence.json").write_text(
+        '{"expires_at":"2099-01-01T00:00:00+00:00","allow_long_entries":true,"risk_level":"normal",'
+        '"asset_sentiment":{"BTC":{"score":-0.8,"confidence":0.9},"ETH":{"score":0.1,"confidence":0.8}}}'
+    )
+    assert strategy._intelligence_allows_entry("BTC/USDT") is False
+    assert strategy._intelligence_allows_entry("ETH/USDT") is True
+
+
 def test_risk_parameters_are_conservative_and_complete():
     assert AIRSIAlgoStrategy.stoploss < 0
     assert AIRSIAlgoStrategy.stoploss >= -0.10

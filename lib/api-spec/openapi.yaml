@@ -383,6 +383,26 @@ components:
                 errors:
                   type: array
                   items: { type: string }
+                news_sentiment: { type: number }
+                news_confidence: { type: number }
+                news_source_diversity: { type: integer }
+                asset_sentiment:
+                  type: object
+                  additionalProperties:
+                    type: object
+                    properties:
+                      score: { type: number }
+                      confidence: { type: number }
+                high_impact_news:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: true
+                news_analyses:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: true
               required:
                 [
                   generated_at,

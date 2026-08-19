@@ -112,7 +112,7 @@ class AIRSIAlgoStrategy(IStrategy):
 
         # External intelligence can only veto new entries in live/dry-run
         # operation. Backtests and hyperopt remain fully deterministic.
-        if not self._intelligence_allows_entry():
+        if not self._intelligence_allows_entry(metadata.get("pair")):
             return dataframe
 
         mean_reversion = (
@@ -137,7 +137,7 @@ class AIRSIAlgoStrategy(IStrategy):
         dataframe.loc[trend_pullback, ["enter_long", "enter_tag"]] = [1, "bullish_trend_pullback"]
         return dataframe
 
-    def _intelligence_allows_entry(self) -> bool:
+    def _intelligence_allows_entry(self, pair: str | None = None) -> bool:
         if not self.live_intelligence_enabled:
             return True
         runmode = self.config.get("runmode")
@@ -151,7 +151,15 @@ class AIRSIAlgoStrategy(IStrategy):
             expires_at = datetime.fromisoformat(str(decision["expires_at"]))
             if expires_at <= datetime.now(timezone.utc):
                 return False
-            return bool(decision["allow_long_entries"]) and decision.get("risk_level") not in {"high", "elevated"}
+            if not bool(decision["allow_long_entries"]) or decision.get("risk_level") in {"high", "elevated"}:
+                return False
+            base_asset = (pair or "").split("/", 1)[0].upper()
+            asset_view = decision.get("asset_sentiment", {}).get(base_asset, {})
+            asset_score = float(asset_view.get("score", 0.0))
+            asset_confidence = float(asset_view.get("confidence", 0.0))
+            if base_asset and asset_score <= -0.60 and asset_confidence >= 0.65:
+                return False
+            return True
         except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
             return False
 

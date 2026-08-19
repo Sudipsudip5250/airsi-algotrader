@@ -70,6 +70,8 @@ All profiles use `AIRSIAlgoStrategy`. Exchange keys are environment-injected; wi
 
 The optional fallback chain is **Groq → OpenRouter → Hugging Face → Ollama → plain text**. Provider failures do not stop the bot, and the strategy does not depend on a model response. AI output is commentary for operators, not a trading signal.
 
+The separate market-intelligence worker adds timestamped crypto-news classification through RSS/GDELT sources and an optional structured `gpt-5-mini` call. It aggregates sentiment with source weighting, six-hour recency decay, confidence, impact, and multi-source corroboration. Its only trading authority is a fail-safe veto on new live/dry-run entries; it cannot select trades, size positions, set leverage, or close positions.
+
 ## Safety controls
 
 The platform uses Freqtrade protections, a negative stoploss, ROI limits, a cooldown period, a stoploss guard, and a maximum-drawdown guard. The dashboard and Freqtrade API must be kept on a private network or behind an authenticated reverse proxy. Replace all sample credentials and secrets before any non-local deployment.
