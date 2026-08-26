@@ -186,3 +186,150 @@ export const BotIntelligenceResponse = zod.object({
 })
 
 
+/**
+ * @summary List human-review experiment proposals
+ */
+export const listExperimentsQueryLimitDefault = 200;
+export const listExperimentsQueryLimitMax = 200;
+
+
+
+export const ListExperimentsQueryParams = zod.object({
+  "limit": zod.coerce.number().min(1).max(listExperimentsQueryLimitMax).default(listExperimentsQueryLimitDefault)
+})
+
+export const ListExperimentsResponse = zod.object({
+  "experiments": zod.array(zod.object({
+  "id": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'rejected', 'request-more-data', 'evaluated']),
+  "proposal": zod.object({
+  "schema_version": zod.number(),
+  "proposal_id": zod.string(),
+  "created_at": zod.string(),
+  "title": zod.string(),
+  "hypothesis": zod.string(),
+  "proposal_type": zod.string(),
+  "target_config": zod.string(),
+  "changes": zod.record(zod.string(), zod.number()),
+  "evaluation_plan": zod.record(zod.string(), zod.unknown()),
+  "source_summary": zod.record(zod.string(), zod.unknown()),
+  "rationale": zod.string(),
+  "status": zod.string()
+}),
+  "evaluation": zod.union([zod.object({
+  "schema_version": zod.number(),
+  "proposal_id": zod.string(),
+  "evaluated_at": zod.string(),
+  "evaluator_version": zod.string(),
+  "baseline": zod.object({
+  "expectancy": zod.number(),
+  "max_drawdown": zod.number(),
+  "number_of_trades": zod.number()
+}),
+  "candidate": zod.object({
+  "expectancy": zod.number(),
+  "max_drawdown": zod.number(),
+  "number_of_trades": zod.number()
+}),
+  "delta": zod.object({
+  "expectancy": zod.number(),
+  "max_drawdown": zod.number(),
+  "number_of_trades": zod.number()
+}),
+  "verdict": zod.enum(['promising', 'not_promising', 'inconclusive', 'not_run']),
+  "notes": zod.string()
+}),zod.null()]),
+  "decision": zod.union([zod.object({
+  "schema_version": zod.number(),
+  "proposal_id": zod.string(),
+  "decided_at": zod.string(),
+  "reviewer": zod.string(),
+  "decision": zod.enum(['approve', 'reject', 'request-more-data']),
+  "rationale": zod.string(),
+  "apply_to_experimental": zod.boolean(),
+  "applied_path": zod.string().nullable()
+}),zod.null()]),
+  "experimental_profile": zod.string().nullable()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Get one experiment proposal and evaluation
+ */
+export const GetExperimentParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetExperimentResponse = zod.object({
+  "id": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'rejected', 'request-more-data', 'evaluated']),
+  "proposal": zod.object({
+  "schema_version": zod.number(),
+  "proposal_id": zod.string(),
+  "created_at": zod.string(),
+  "title": zod.string(),
+  "hypothesis": zod.string(),
+  "proposal_type": zod.string(),
+  "target_config": zod.string(),
+  "changes": zod.record(zod.string(), zod.number()),
+  "evaluation_plan": zod.record(zod.string(), zod.unknown()),
+  "source_summary": zod.record(zod.string(), zod.unknown()),
+  "rationale": zod.string(),
+  "status": zod.string()
+}),
+  "evaluation": zod.union([zod.object({
+  "schema_version": zod.number(),
+  "proposal_id": zod.string(),
+  "evaluated_at": zod.string(),
+  "evaluator_version": zod.string(),
+  "baseline": zod.object({
+  "expectancy": zod.number(),
+  "max_drawdown": zod.number(),
+  "number_of_trades": zod.number()
+}),
+  "candidate": zod.object({
+  "expectancy": zod.number(),
+  "max_drawdown": zod.number(),
+  "number_of_trades": zod.number()
+}),
+  "delta": zod.object({
+  "expectancy": zod.number(),
+  "max_drawdown": zod.number(),
+  "number_of_trades": zod.number()
+}),
+  "verdict": zod.enum(['promising', 'not_promising', 'inconclusive', 'not_run']),
+  "notes": zod.string()
+}),zod.null()]),
+  "decision": zod.union([zod.object({
+  "schema_version": zod.number(),
+  "proposal_id": zod.string(),
+  "decided_at": zod.string(),
+  "reviewer": zod.string(),
+  "decision": zod.enum(['approve', 'reject', 'request-more-data']),
+  "rationale": zod.string(),
+  "apply_to_experimental": zod.boolean(),
+  "applied_path": zod.string().nullable()
+}),zod.null()]),
+  "experimental_profile": zod.string().nullable()
+})
+
+
+/**
+ * @summary Record a human decision for an evaluated proposal
+ */
+export const DecideExperimentParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const decideExperimentBodyApplyExperimentalDefault = false;
+
+export const DecideExperimentBody = zod.object({
+  "decision": zod.enum(['approve', 'reject', 'request-more-data']),
+  "note": zod.string().nullish(),
+  "reviewer": zod.string().nullish(),
+  "apply_experimental": zod.boolean().default(decideExperimentBodyApplyExperimentalDefault)
+})
+
+

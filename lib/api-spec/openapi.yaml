@@ -11,6 +11,8 @@ tags:
     description: Health operations
   - name: bot
     description: Trading bot operations
+  - name: experiments
+    description: Human-reviewed self-improvement research operations
 paths:
   /healthz:
     get:
@@ -154,6 +156,81 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MarketIntelligence"
+
+  /experiments:
+    get:
+      operationId: listExperiments
+      tags: [experiments]
+      summary: List human-review experiment proposals
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 200
+      responses:
+        "200":
+          description: Experiment history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExperimentList"
+        "400":
+          description: Invalid limit
+
+  /experiments/{id}:
+    get:
+      operationId: getExperiment
+      tags: [experiments]
+      summary: Get one experiment proposal and evaluation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Experiment detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExperimentSummary"
+        "404":
+          description: Experiment not found
+
+  /experiments/{id}/decision:
+    post:
+      operationId: decideExperiment
+      tags: [experiments]
+      summary: Record a human decision for an evaluated proposal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExperimentDecisionInput"
+      responses:
+        "201":
+          description: Decision recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExperimentSummary"
+        "400":
+          description: Invalid decision
+        "404":
+          description: Experiment not found
+        "409":
+          description: Proposal has not been evaluated
 components:
   schemas:
     HealthStatus:
@@ -401,6 +478,115 @@ components:
                 ]
             - type: "null"
       required: [available, decision]
+
+    ExperimentMetrics:
+      type: object
+      properties:
+        expectancy: { type: number }
+        max_drawdown: { type: number }
+        number_of_trades: { type: number }
+      required: [expectancy, max_drawdown, number_of_trades]
+
+    ExperimentProposal:
+      type: object
+      additionalProperties: true
+      properties:
+        schema_version: { type: integer }
+        proposal_id: { type: string }
+        created_at: { type: string }
+        title: { type: string }
+        hypothesis: { type: string }
+        proposal_type: { type: string }
+        target_config: { type: string }
+        changes:
+          type: object
+          additionalProperties: { type: number }
+        evaluation_plan:
+          type: object
+          additionalProperties: true
+        source_summary:
+          type: object
+          additionalProperties: true
+        rationale: { type: string }
+        status: { type: string }
+      required: [schema_version, proposal_id, created_at, title, hypothesis, proposal_type, target_config, changes, evaluation_plan, source_summary, rationale, status]
+
+    ExperimentEvaluation:
+      type: object
+      additionalProperties: true
+      properties:
+        schema_version: { type: integer }
+        proposal_id: { type: string }
+        evaluated_at: { type: string }
+        evaluator_version: { type: string }
+        baseline:
+          $ref: "#/components/schemas/ExperimentMetrics"
+        candidate:
+          $ref: "#/components/schemas/ExperimentMetrics"
+        delta:
+          $ref: "#/components/schemas/ExperimentMetrics"
+        verdict:
+          type: string
+          enum: [promising, not_promising, inconclusive, not_run]
+        notes: { type: string }
+      required: [schema_version, proposal_id, evaluated_at, evaluator_version, baseline, candidate, delta, verdict, notes]
+
+    HumanDecision:
+      type: object
+      additionalProperties: true
+      properties:
+        schema_version: { type: integer }
+        proposal_id: { type: string }
+        decided_at: { type: string }
+        reviewer: { type: string }
+        decision:
+          type: string
+          enum: [approve, reject, request-more-data]
+        rationale: { type: string }
+        apply_to_experimental: { type: boolean }
+        applied_path: { type: [string, "null"] }
+      required: [schema_version, proposal_id, decided_at, reviewer, decision, rationale, apply_to_experimental, applied_path]
+
+    ExperimentSummary:
+      type: object
+      properties:
+        id: { type: string }
+        status:
+          type: string
+          enum: [pending, approved, rejected, request-more-data, evaluated]
+        proposal:
+          $ref: "#/components/schemas/ExperimentProposal"
+        evaluation:
+          oneOf:
+            - $ref: "#/components/schemas/ExperimentEvaluation"
+            - type: "null"
+        decision:
+          oneOf:
+            - $ref: "#/components/schemas/HumanDecision"
+            - type: "null"
+        experimental_profile: { type: [string, "null"] }
+      required: [id, status, proposal, evaluation, decision, experimental_profile]
+
+    ExperimentList:
+      type: object
+      properties:
+        experiments:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExperimentSummary"
+        total: { type: integer }
+      required: [experiments, total]
+
+    ExperimentDecisionInput:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum: [approve, reject, request-more-data]
+        note: { type: [string, "null"] }
+        reviewer: { type: [string, "null"] }
+        apply_experimental: { type: boolean, default: false }
+      required: [decision]
 
     BotConfig:
       type: object

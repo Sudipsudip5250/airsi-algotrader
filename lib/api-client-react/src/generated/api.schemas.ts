@@ -153,6 +153,123 @@ export interface MarketIntelligence {
   decision: MarketIntelligenceDecision;
 }
 
+export interface ExperimentMetrics {
+  expectancy: number;
+  max_drawdown: number;
+  number_of_trades: number;
+}
+
+export type ExperimentProposalChanges = {[key: string]: number};
+
+export type ExperimentProposalEvaluationPlan = { [key: string]: unknown };
+
+export type ExperimentProposalSourceSummary = { [key: string]: unknown };
+
+export interface ExperimentProposal {
+  schema_version: number;
+  proposal_id: string;
+  created_at: string;
+  title: string;
+  hypothesis: string;
+  proposal_type: string;
+  target_config: string;
+  changes: ExperimentProposalChanges;
+  evaluation_plan: ExperimentProposalEvaluationPlan;
+  source_summary: ExperimentProposalSourceSummary;
+  rationale: string;
+  status: string;
+  [key: string]: unknown;
+ }
+
+export type ExperimentEvaluationVerdict = typeof ExperimentEvaluationVerdict[keyof typeof ExperimentEvaluationVerdict];
+
+
+export const ExperimentEvaluationVerdict = {
+  promising: 'promising',
+  not_promising: 'not_promising',
+  inconclusive: 'inconclusive',
+  not_run: 'not_run',
+} as const;
+
+export interface ExperimentEvaluation {
+  schema_version: number;
+  proposal_id: string;
+  evaluated_at: string;
+  evaluator_version: string;
+  baseline: ExperimentMetrics;
+  candidate: ExperimentMetrics;
+  delta: ExperimentMetrics;
+  verdict: ExperimentEvaluationVerdict;
+  notes: string;
+  [key: string]: unknown;
+ }
+
+export type HumanDecisionDecision = typeof HumanDecisionDecision[keyof typeof HumanDecisionDecision];
+
+
+export const HumanDecisionDecision = {
+  approve: 'approve',
+  reject: 'reject',
+  'request-more-data': 'request-more-data',
+} as const;
+
+export interface HumanDecision {
+  schema_version: number;
+  proposal_id: string;
+  decided_at: string;
+  reviewer: string;
+  decision: HumanDecisionDecision;
+  rationale: string;
+  apply_to_experimental: boolean;
+  /** @nullable */
+  applied_path: string | null;
+  [key: string]: unknown;
+ }
+
+export type ExperimentSummaryStatus = typeof ExperimentSummaryStatus[keyof typeof ExperimentSummaryStatus];
+
+
+export const ExperimentSummaryStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
+  'request-more-data': 'request-more-data',
+  evaluated: 'evaluated',
+} as const;
+
+export interface ExperimentSummary {
+  id: string;
+  status: ExperimentSummaryStatus;
+  proposal: ExperimentProposal;
+  evaluation: ExperimentEvaluation | null;
+  decision: HumanDecision | null;
+  /** @nullable */
+  experimental_profile: string | null;
+}
+
+export interface ExperimentList {
+  experiments: ExperimentSummary[];
+  total: number;
+}
+
+export type ExperimentDecisionInputDecision = typeof ExperimentDecisionInputDecision[keyof typeof ExperimentDecisionInputDecision];
+
+
+export const ExperimentDecisionInputDecision = {
+  approve: 'approve',
+  reject: 'reject',
+  'request-more-data': 'request-more-data',
+} as const;
+
+export interface ExperimentDecisionInput {
+  decision: ExperimentDecisionInputDecision;
+  /** @nullable */
+  note?: string | null;
+  /** @nullable */
+  reviewer?: string | null;
+  apply_experimental?: boolean;
+}
+
 export interface BotConfig {
   /** @nullable */
   strategy?: string | null;
@@ -177,6 +294,14 @@ limit?: number;
 };
 
 export type BotLogsParams = {
+limit?: number;
+};
+
+export type ListExperimentsParams = {
+/**
+ * @minimum 1
+ * @maximum 200
+ */
 limit?: number;
 };
 

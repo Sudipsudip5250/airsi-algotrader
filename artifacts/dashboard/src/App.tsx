@@ -5,6 +5,7 @@ import Dashboard from "@/pages/Dashboard";
 import Trades from "@/pages/Trades";
 import Performance from "@/pages/Performance";
 import Logs from "@/pages/Logs";
+import Experiments from "@/pages/Experiments";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -24,6 +25,7 @@ function Router() {
         <Route path="/trades" component={Trades} />
         <Route path="/performance" component={Performance} />
         <Route path="/logs" component={Logs} />
+        <Route path="/experiments" component={Experiments} />
       </Switch>
     </Layout>
   );

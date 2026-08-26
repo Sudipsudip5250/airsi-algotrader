@@ -6,6 +6,7 @@ import {
   ArrowLeftRight,
   BarChart2,
   ScrollText,
+  FlaskConical,
   Bot,
   Circle,
 } from "lucide-react";
@@ -16,6 +17,7 @@ const navItems = [
   { href: "/trades",      icon: ArrowLeftRight, label: "Trades" },
   { href: "/performance", icon: BarChart2,      label: "Performance" },
   { href: "/logs",        icon: ScrollText,     label: "Logs" },
+  { href: "/experiments", icon: FlaskConical,   label: "Experiments" },
 ];
 
 export default function Layout({ children }: { children: ReactNode }) {

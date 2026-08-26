@@ -76,6 +76,20 @@ def test_evaluator_fails_closed_on_insufficient_trades() -> None:
     assert result.candidate == result.baseline
 
 
+def test_request_more_data_is_explicit_and_never_applies_profile() -> None:
+    decision = HumanDecision(
+        proposal_id="proposal-test-005",
+        decided_at="2026-01-01T00:00:00Z",
+        reviewer="Reviewer",
+        decision="request-more-data",
+        rationale="Collect more paper evidence.",
+        apply_to_experimental=False,
+        applied_path=None,
+    )
+    assert decision.decision == "request-more-data"
+    assert decision.applied_path is None
+
+
 def test_human_decision_requires_experimental_directory_for_apply() -> None:
     with pytest.raises(SchemaError):
         HumanDecision(

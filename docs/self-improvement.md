@@ -1,6 +1,6 @@
 # Self-improvement loop: Phase A and minimal Phase B
 
-This is a deliberately small, file-based research loop. It can collect recent local backtest exports and paper-log tails, create one structured proposal, evaluate a dry candidate against a baseline, and record a human decision. It cannot place orders, modify the production strategy, modify the default paper profile, or modify the live profile.
+This is a deliberately small, file-based research loop. It can collect recent local backtest exports and paper-log tails, create one structured proposal, evaluate a dry candidate against a baseline, and record a human decision. It cannot place orders, modify the production strategy, modify the default paper profile, or modify the live profile. The React dashboard exposes the same artifacts at `/experiments` for inspection and human review.
 
 ## First full loop
 
@@ -20,10 +20,10 @@ python agents/evaluator.py proposals/<proposal-id>.json
 cat experiments/evaluations/<proposal-id>.json
 python agents/reviewer.py list
 
-# 5. Record an explicit human rejection or approval.
-python agents/reviewer.py decide proposals/<proposal-id>.json reject \
+# 5. Record an explicit human rejection, request for more data, or approval.
+python agents/reviewer.py decide proposals/<proposal-id>.json request-more-data \
   --reviewer "Your Name" \
-  --rationale "The dry evaluation is inconclusive; collect more paper data first."
+  --rationale "Collect a longer paper-log sample before reconsidering."
 
 # 6. For an approved experiment only, create a stopped dry-run profile.
 python agents/reviewer.py decide proposals/<proposal-id>.json approve \
@@ -32,7 +32,11 @@ python agents/reviewer.py decide proposals/<proposal-id>.json approve \
   --apply-experimental
 ```
 
-The generated files are human-readable JSON: `proposals/<id>.json`, `experiments/evaluations/<id>.json`, `experiments/decisions/<id>.json`, and, only with `--apply-experimental`, `experiments/experimental-profiles/<id>.json`. The action trail is `experiments/agent-actions.jsonl`.
+The generated files are human-readable JSON: `proposals/<id>.json`, `experiments/evaluations/<id>.json`, `experiments/decisions/<id>.json`, and, only with `--apply-experimental`, `experiments/experimental-profiles/<id>.json`. The action trail is `experiments/agent-actions.jsonl`. A `request-more-data` decision is an explicit review outcome and never creates a profile.
+
+## Dashboard review
+
+Start the API and dashboard as described in [Dashboard Setup](dashboard.md), then open `http://localhost:23183/experiments`. The page lists proposal status, evaluation metrics, expandable proposal details, and the three review actions. The optional approval checkbox creates only a stopped `dry_run: true` experimental profile. The API accepts `POST /api/experiments/<proposal-id>/decision` and writes the same decision JSON plus an append-only `dashboard-review` action entry. Keep the API bound to localhost or a private network because this repository does not add a separate API authentication layer.
 
 ## Optional advisory AI
 

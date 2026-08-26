@@ -67,6 +67,10 @@ services:
     restart: unless-stopped
     volumes:
       - ./bot/user_data:/app/intelligence:ro
+      # Research artifacts are the only writable API surface; strategy/live files stay unmapped.
+      - ./proposals:/app/research/proposals:ro
+      - ./experiments:/app/research/experiments:rw
+      - ./bot/config.paper.json:/app/research/bot/config.paper.json:ro
     ports:
       - "127.0.0.1:5000:5000"
     environment:
@@ -76,6 +80,7 @@ services:
       - FREQTRADE_API_PASS=${FREQTRADE_API_PASS:?Set FREQTRADE_API_PASS before starting the stack}
       - FREQTRADE_JWT_SECRET=${FREQTRADE_JWT_SECRET:?Set FREQTRADE_JWT_SECRET before starting the stack}
       - INTELLIGENCE_DECISION_PATH=/app/intelligence/market_intelligence.json
+      - AIRSI_REPO_ROOT=/app/research
       - NODE_ENV=production
     depends_on:
       freqtrade:

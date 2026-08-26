@@ -6,11 +6,15 @@
  * OpenAPI spec version: 0.1.0
  */
 import {
+  useMutation,
   useQuery
 } from '@tanstack/react-query';
 import type {
+  MutationFunction,
   QueryFunction,
   QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult
 } from '@tanstack/react-query';
@@ -24,14 +28,18 @@ import type {
   BotProfit,
   BotStatus,
   BotTradesParams,
+  ExperimentDecisionInput,
+  ExperimentList,
+  ExperimentSummary,
   HealthStatus,
+  ListExperimentsParams,
   MarketIntelligence,
   PairPerformance,
   TradeList
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
-import type { ErrorType } from '../custom-fetch';
+import type { ErrorType , BodyType } from '../custom-fetch';
 
 type AwaitedInput<T> = PromiseLike<T> | T;
 
@@ -825,4 +833,237 @@ export function useBotIntelligence<TData = Awaited<ReturnType<typeof botIntellig
 
 
 
+
+export const getListExperimentsUrl = (params?: ListExperimentsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/experiments?${stringifiedParams}` : `/api/experiments`
+}
+
+/**
+ * @summary List human-review experiment proposals
+ */
+export const listExperiments = async (params?: ListExperimentsParams, options?: RequestInit): Promise<ExperimentList> => {
+
+  return customFetch<ExperimentList>(getListExperimentsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListExperimentsQueryKey = (params?: ListExperimentsParams,) => {
+    return [
+    `/api/experiments`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListExperimentsQueryOptions = <TData = Awaited<ReturnType<typeof listExperiments>>, TError = ErrorType<void>>(params?: ListExperimentsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listExperiments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListExperimentsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listExperiments>>> = ({ signal }) => listExperiments(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listExperiments>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListExperimentsQueryResult = NonNullable<Awaited<ReturnType<typeof listExperiments>>>
+export type ListExperimentsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List human-review experiment proposals
+ */
+
+export function useListExperiments<TData = Awaited<ReturnType<typeof listExperiments>>, TError = ErrorType<void>>(
+ params?: ListExperimentsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listExperiments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListExperimentsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetExperimentUrl = (id: string,) => {
+
+
+
+
+  return `/api/experiments/${id}`
+}
+
+/**
+ * @summary Get one experiment proposal and evaluation
+ */
+export const getExperiment = async (id: string, options?: RequestInit): Promise<ExperimentSummary> => {
+
+  return customFetch<ExperimentSummary>(getGetExperimentUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetExperimentQueryKey = (id: string,) => {
+    return [
+    `/api/experiments/${id}`
+    ] as const;
+    }
+
+
+export const getGetExperimentQueryOptions = <TData = Awaited<ReturnType<typeof getExperiment>>, TError = ErrorType<void>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getExperiment>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetExperimentQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getExperiment>>> = ({ signal }) => getExperiment(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getExperiment>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetExperimentQueryResult = NonNullable<Awaited<ReturnType<typeof getExperiment>>>
+export type GetExperimentQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get one experiment proposal and evaluation
+ */
+
+export function useGetExperiment<TData = Awaited<ReturnType<typeof getExperiment>>, TError = ErrorType<void>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getExperiment>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetExperimentQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getDecideExperimentUrl = (id: string,) => {
+
+
+
+
+  return `/api/experiments/${id}/decision`
+}
+
+/**
+ * @summary Record a human decision for an evaluated proposal
+ */
+export const decideExperiment = async (id: string,
+    experimentDecisionInput: ExperimentDecisionInput, options?: RequestInit): Promise<ExperimentSummary> => {
+
+  return customFetch<ExperimentSummary>(getDecideExperimentUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      experimentDecisionInput,)
+  }
+);}
+
+
+
+
+export const getDecideExperimentMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decideExperiment>>, TError,{id: string;data: BodyType<ExperimentDecisionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof decideExperiment>>, TError,{id: string;data: BodyType<ExperimentDecisionInput>}, TContext> => {
+
+const mutationKey = ['decideExperiment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof decideExperiment>>, {id: string;data: BodyType<ExperimentDecisionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  decideExperiment(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DecideExperimentMutationResult = NonNullable<Awaited<ReturnType<typeof decideExperiment>>>
+    export type DecideExperimentMutationBody = BodyType<ExperimentDecisionInput>
+    export type DecideExperimentMutationError = ErrorType<void>
+
+    /**
+ * @summary Record a human decision for an evaluated proposal
+ */
+export const useDecideExperiment = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decideExperiment>>, TError,{id: string;data: BodyType<ExperimentDecisionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof decideExperiment>>,
+        TError,
+        {id: string;data: BodyType<ExperimentDecisionInput>},
+        TContext
+      > => {
+      return useMutation(getDecideExperimentMutationOptions(options));
+    }
 

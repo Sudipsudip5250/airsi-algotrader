@@ -185,8 +185,8 @@ class HumanDecision:
         _id(self.proposal_id, "proposal_id")
         _timestamp(self.decided_at, "decided_at")
         _text(self.reviewer, "reviewer", max_length=256)
-        if self.decision not in {"approve", "reject"}:
-            raise SchemaError("decision must be approve or reject")
+        if self.decision not in {"approve", "reject", "request-more-data"}:
+            raise SchemaError("decision must be approve, reject, or request-more-data")
         _text(self.rationale, "rationale")
         if not isinstance(self.apply_to_experimental, bool):
             raise SchemaError("apply_to_experimental must be boolean")

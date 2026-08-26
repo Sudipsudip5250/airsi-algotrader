@@ -133,6 +133,7 @@ airsi-algotrader/
 | Contribution rules                      | `CONTRIBUTING.md`              |
 | CI/CD and GitHub policy                 | `docs/ci-cd-policy.md`         |
 | Self-improvement loop                   | `docs/self-improvement.md`     |
+| Self-improvement example                | `docs/self-improvement-example.md` |
 | Dependency security audit               | `docs/dependency-audit.md`     |
 
 ## Automated checks and repository policy
