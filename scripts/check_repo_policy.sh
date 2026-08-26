@@ -35,9 +35,15 @@ if grep -RInE --exclude='*.md' --exclude='*.txt' --exclude='*.json' \
 fi
 
 if grep -RInE --include='*.yml' --include='*.yaml' \
-  'pull_request_target|workflow_run|self-hosted|secrets\.|freqtrade[[:space:]]+trade|force(entry|buy|exit)|/api/v1/(start|stop)' \
+  'pull_request_target|workflow_run|self-hosted|secrets\\.|freqtrade[[:space:]]+trade|force(entry|buy|exit)|/api/v1/(start|stop)' \
   .github/workflows; then
   fail "workflow contains a privileged trigger, secret reference, self-hosted runner, or exchange-control operation"
+fi
+
+if grep -RInE --include='*.py' \
+  '(^|[[:space:]])(ccxt|freqtrade[[:space:]]+trade)|requests\.(post|put|patch|delete)|/api/v1/(start|stop|force|trades)' \
+  agents; then
+  fail "self-improvement agents contain an exchange or order-control capability"
 fi
 
 while IFS= read -r line; do

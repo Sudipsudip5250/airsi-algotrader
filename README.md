@@ -55,6 +55,10 @@ bash scripts/run_bot.sh paper
 
 The default paper profiles use `dry_run: true`, a virtual wallet, and environment-injected credentials. The live profile is `dry_run: false` but starts with `initial_state: "stopped"`; starting live trading is an explicit, separately reviewed action. Do not enable live trading until the test, backtest, and paper-trading stages have been reviewed.
 
+## Self-improvement research loop
+
+The first self-improvement loop is intentionally offline and file-based. The researcher creates a versioned proposal from local evidence, the evaluator compares a dry candidate against expectancy/drawdown/trade-count baselines, and a human records approval or rejection. Approval can create only a stopped dry-run profile under `experiments/experimental-profiles/`; it never changes the production strategy or live configuration. See [docs/self-improvement.md](docs/self-improvement.md).
+
 ## Configuration profiles
 
 | Profile                        | Purpose                          | Default safety state                                |
@@ -101,6 +105,9 @@ airsi-algotrader/
 │   ├── api-server/
 │   └── dashboard/
 ├── scripts/
+├── agents/
+├── proposals/
+├── experiments/
 ├── docs/
 ├── docker/
 ├── install.sh
@@ -125,6 +132,8 @@ airsi-algotrader/
 | Security reporting                      | `SECURITY.md`                  |
 | Contribution rules                      | `CONTRIBUTING.md`              |
 | CI/CD and GitHub policy                 | `docs/ci-cd-policy.md`         |
+| Self-improvement loop                   | `docs/self-improvement.md`     |
+| Dependency security audit               | `docs/dependency-audit.md`     |
 
 ## Automated checks and repository policy
 
