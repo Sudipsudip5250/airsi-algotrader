@@ -1,10 +1,19 @@
 import { appendFile, mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { Router } from "express";
 import type { Request, Response } from "express";
 
 const router = Router();
-const ROOT = resolve(process.env["AIRSI_REPO_ROOT"] ?? process.cwd());
+
+function resolveArtifactRoot(): string {
+  const configured = process.env["AIRSI_REPO_ROOT"];
+  if (configured) return resolve(configured);
+  const candidates = [process.cwd(), resolve(process.cwd(), "../..")];
+  return candidates.find((candidate) => existsSync(join(candidate, "proposals")) && existsSync(join(candidate, "bot", "config.paper.json"))) ?? candidates[0];
+}
+
+const ROOT = resolveArtifactRoot();
 const PROPOSALS_DIR = join(ROOT, "proposals");
 const EVALUATIONS_DIR = join(ROOT, "experiments", "evaluations");
 const DECISIONS_DIR = join(ROOT, "experiments", "decisions");
