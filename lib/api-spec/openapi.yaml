@@ -373,8 +373,10 @@ components:
                 generated_at: { type: string }
                 expires_at: { type: string }
                 allow_long_entries: { type: boolean }
-                risk_level: { type: string }
-                confidence: { type: number }
+                risk_level:
+                  type: string
+                  enum: [normal, guarded, elevated, high]
+                confidence: { type: number, minimum: 0, maximum: 1 }
                 reason: { type: string }
                 source_count: { type: integer }
                 news_count: { type: integer }
@@ -391,6 +393,11 @@ components:
                   risk_level,
                   confidence,
                   reason,
+                  source_count,
+                  news_count,
+                  model,
+                  snapshot_hash,
+                  errors,
                 ]
             - type: "null"
       required: [available, decision]

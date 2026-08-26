@@ -28,9 +28,9 @@ OS="$(uname -s)"
 
 # ── Step 1: Python ────────────────────────────────────────────────────────────
 
-step "1/6" "Checking Python 3.10+"
+step "1/6" "Checking Python 3.11+"
 
-if command -v python3 &>/dev/null; then
+if command -v python3 &>/dev/null && python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)'; then
     PY_VER=$(python3 --version)
     skip "Python: $PY_VER"
 else
@@ -87,8 +87,8 @@ ok "Virtual environment activated"
 
 step "4/6" "Installing Python packages (2-5 minutes)"
 
-pip install --upgrade pip --quiet
-pip install -r bot/requirements.txt
+    python -m pip install --upgrade pip --quiet
+    python -m pip install -r bot/requirements.txt
 ok "All Python packages installed"
 
 # ── Step 5: Node.js dependencies ─────────────────────────────────────────────
@@ -101,7 +101,7 @@ if command -v node &>/dev/null; then
         npm install -g pnpm --quiet
     fi
     if [[ -f "package.json" ]]; then
-        pnpm install --reporter=silent
+        pnpm install --frozen-lockfile --reporter=silent
         ok "pnpm packages installed"
     else
         warn "No package.json found — skipping pnpm install"

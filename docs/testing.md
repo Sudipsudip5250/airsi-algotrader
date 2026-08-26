@@ -97,6 +97,7 @@ The intelligence worker can only veto new entries. It cannot place trades, selec
 - [ ] Emergency `/stop` command tested
 - [ ] Exchange API key created with **NO withdrawal permissions**
 - [ ] `max_open_trades: 2` and a reviewed stake amount in `config.live.json`
+- [ ] Confirm the live profile’s `initial_state: "stopped"` and explicitly start only after this checklist passes
 
 ```bash
 # Start live trading only after every checklist item is complete.

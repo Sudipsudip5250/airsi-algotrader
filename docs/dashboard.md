@@ -6,9 +6,9 @@ The project includes a React dashboard with live trade monitoring, P&L charts, a
 
 ## Prerequisites
 
-- Node.js 18+ and pnpm installed
+- Node.js 20+ and pnpm installed
 - Freqtrade running (paper or live)
-- API keys configured in `.env`
+- `FREQTRADE_API_USER`, `FREQTRADE_API_PASS`, and `FREQTRADE_JWT_SECRET` configured in `.env`
 
 ---
 
@@ -20,7 +20,7 @@ The project includes a React dashboard with live trade monitoring, P&L charts, a
 pnpm --filter @workspace/api-server run dev
 ```
 
-Runs on `http://localhost:5000`.
+Runs on `http://localhost:5000`. The proxy exposes read-only telemetry routes, validates `limit` query parameters, sanitizes Freqtrade configuration responses, and reports missing or expired intelligence as unavailable.
 
 ### 2. Start the Dashboard
 
@@ -67,5 +67,5 @@ docker compose down
 | Issue | Fix |
 |---|---|
 | Dashboard shows `online: false` | Freqtrade REST API not running — start the bot first |
-| API returns 401 | Check `FREQTRADE_API_USER` / `FREQTRADE_API_PASS` in `.env` |
+| API returns 401 or 503 | Check `FREQTRADE_API_USER` / `FREQTRADE_API_PASS` in `.env` and confirm Freqtrade is running |
 | Port conflict | Change `PORT` in `.env` or `docker-compose.yml` |

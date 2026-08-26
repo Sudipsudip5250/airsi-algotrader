@@ -74,4 +74,3 @@ These protect your local bot dashboard:
 | `FREQTRADE_API_USER` | Choose any username (default: `botuser`) |
 | `FREQTRADE_API_PASS` | Choose a strong password |
 | `FREQTRADE_JWT_SECRET` | Generate with: `openssl rand -base64 64` |
-| `SESSION_SECRET` | Generate with: `openssl rand -base64 32` |

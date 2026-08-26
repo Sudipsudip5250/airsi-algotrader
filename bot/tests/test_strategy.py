@@ -103,7 +103,19 @@ def test_fresh_normal_intelligence_snapshot_allows_entries(tmp_path):
     strategy.config["runmode"] = "dry_run"
     strategy.config["user_data_dir"] = str(tmp_path)
     (tmp_path / "market_intelligence.json").write_text(
-        '{"expires_at":"2099-01-01T00:00:00+00:00","allow_long_entries":true,"risk_level":"normal"}'
+        '{'
+        '"generated_at":"2026-01-01T00:00:00+00:00",'
+        '"expires_at":"2099-01-01T00:00:00+00:00",'
+        '"allow_long_entries":true,'
+        '"risk_level":"normal",'
+        '"confidence":0.8,'
+        '"reason":"normal conditions",'
+        '"source_count":1,'
+        '"news_count":0,'
+        '"model":"deterministic",'
+        '"snapshot_hash":"abc123",'
+        '"errors":[]'
+        '}'
     )
     assert strategy._intelligence_allows_entry() is True
 

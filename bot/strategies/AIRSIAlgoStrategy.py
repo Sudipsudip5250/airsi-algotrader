@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -78,8 +79,17 @@ class AIRSIAlgoStrategy(IStrategy):
             },
         ]
 
-    def populate_indicators(self, dataframe: pd.DataFrame, metadata: dict) -> pd.DataFrame:
-        close = dataframe["close"]
+    def populate_indicators(self, dataframe: pd.DataFrame, metadata: dict[str, Any]) -> pd.DataFrame:
+        required_columns = {"close", "volume"}
+        missing_columns = required_columns.difference(dataframe.columns)
+        if missing_columns:
+            missing = ", ".join(sorted(missing_columns))
+            raise ValueError(f"OHLCV dataframe is missing required columns: {missing}")
+
+        close = pd.to_numeric(dataframe["close"], errors="coerce")
+        volume = pd.to_numeric(dataframe["volume"], errors="coerce")
+        dataframe["close"] = close
+        dataframe["volume"] = volume
         dataframe["ema9"] = close.ewm(span=9, adjust=False, min_periods=9).mean()
         dataframe["ema21"] = close.ewm(span=21, adjust=False, min_periods=21).mean()
         dataframe["ema50"] = close.ewm(span=50, adjust=False, min_periods=50).mean()
@@ -92,11 +102,11 @@ class AIRSIAlgoStrategy(IStrategy):
         dataframe["bb_lower"] = dataframe["bb_mid"] - self.bb_std.value * band_std
 
         dataframe["rsi"] = self._rsi(close, 14)
-        dataframe["volume_mean"] = dataframe["volume"].rolling(20, min_periods=20).mean()
-        dataframe["volume_ratio"] = dataframe["volume"] / dataframe["volume_mean"].replace(0, np.nan)
+        dataframe["volume_mean"] = volume.rolling(20, min_periods=20).mean()
+        dataframe["volume_ratio"] = volume / dataframe["volume_mean"].replace(0, np.nan)
 
         # Regime labels are diagnostic columns and are also used by entries.
-        ema_spread = dataframe["ema50"] / dataframe["ema200"] - 1.0
+        ema_spread = dataframe["ema50"] / dataframe["ema200"].replace(0, np.nan) - 1.0
         dataframe["bull_regime"] = (
             (close > dataframe["ema50"])
             & (dataframe["ema9"] > dataframe["ema21"])
@@ -106,7 +116,7 @@ class AIRSIAlgoStrategy(IStrategy):
         dataframe["range_regime"] = ema_spread.abs() <= 0.008
         return dataframe
 
-    def populate_entry_trend(self, dataframe: pd.DataFrame, metadata: dict) -> pd.DataFrame:
+    def populate_entry_trend(self, dataframe: pd.DataFrame, metadata: dict[str, Any]) -> pd.DataFrame:
         dataframe["enter_long"] = 0
         dataframe["enter_tag"] = ""
 
@@ -144,18 +154,47 @@ class AIRSIAlgoStrategy(IStrategy):
         runmode_value = getattr(runmode, "value", runmode)
         if runmode_value in {"backtest", "hyperopt", "plot"}:
             return True
+
         userdir = Path(str(self.config.get("user_data_dir", "bot/user_data")))
         path = userdir / self.intelligence_filename
         try:
-            decision = json.loads(path.read_text())
-            expires_at = datetime.fromisoformat(str(decision["expires_at"]))
-            if expires_at <= datetime.now(timezone.utc):
+            decision = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(decision, dict):
                 return False
-            return bool(decision["allow_long_entries"]) and decision.get("risk_level") not in {"high", "elevated"}
-        except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+
+            required = {
+                "generated_at", "expires_at", "allow_long_entries", "risk_level",
+                "confidence", "reason", "source_count", "news_count", "model",
+                "snapshot_hash", "errors",
+            }
+            if set(decision) != required:
+                return False
+            if type(decision["allow_long_entries"]) is not bool:
+                return False
+            if decision["risk_level"] not in {"normal", "guarded", "elevated", "high"}:
+                return False
+            confidence = float(decision["confidence"])
+            if not np.isfinite(confidence) or not 0.0 <= confidence <= 1.0:
+                return False
+            if type(decision["source_count"]) is not int or decision["source_count"] < 0:
+                return False
+            if type(decision["news_count"]) is not int or decision["news_count"] < 0:
+                return False
+            if not isinstance(decision["errors"], list) or not all(isinstance(item, str) for item in decision["errors"]):
+                return False
+            if not all(isinstance(decision[key], str) and decision[key].strip() for key in ("generated_at", "expires_at", "reason", "model", "snapshot_hash")):
+                return False
+
+            expires_at = datetime.fromisoformat(decision["expires_at"])
+            if expires_at.tzinfo is None:
+                return False
+            if expires_at.astimezone(timezone.utc) <= datetime.now(timezone.utc):
+                return False
+            return decision["allow_long_entries"] and decision["risk_level"] not in {"high", "elevated"}
+        except (OSError, ValueError, TypeError, OverflowError, json.JSONDecodeError):
             return False
 
-    def populate_exit_trend(self, dataframe: pd.DataFrame, metadata: dict) -> pd.DataFrame:
+    def populate_exit_trend(self, dataframe: pd.DataFrame, metadata: dict[str, Any]) -> pd.DataFrame:
         dataframe["exit_long"] = 0
         exit_signal = (
             (
@@ -173,10 +212,20 @@ class AIRSIAlgoStrategy(IStrategy):
 
     @staticmethod
     def _rsi(series: pd.Series, period: int = 14) -> pd.Series:
+        """Return a bounded Wilder-style RSI, including flat-market edge cases."""
+        if period <= 0:
+            raise ValueError("RSI period must be positive")
         delta = series.diff()
         gain = delta.clip(lower=0)
         loss = -delta.clip(upper=0)
-        avg_gain = gain.ewm(com=period - 1, min_periods=period).mean()
-        avg_loss = loss.ewm(com=period - 1, min_periods=period).mean()
+        avg_gain = gain.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
+        avg_loss = loss.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
+
         rs = avg_gain / avg_loss.replace(0, np.nan)
-        return 100 - (100 / (1 + rs))
+        rsi = 100 - (100 / (1 + rs))
+        no_losses = avg_loss == 0
+        no_gains = avg_gain == 0
+        rsi = rsi.where(~no_losses, 100.0)
+        rsi = rsi.where(~no_gains, 0.0)
+        rsi = rsi.where(~(no_losses & no_gains), 50.0)
+        return rsi.clip(lower=0, upper=100)

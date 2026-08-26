@@ -160,3 +160,29 @@ export const BotConfigResponse = zod.object({
 })
 
 
+/**
+ * @summary Latest market-intelligence risk decision
+ */
+export const botIntelligenceResponseDecisionOneConfidenceMin = 0;
+export const botIntelligenceResponseDecisionOneConfidenceMax = 1;
+
+
+
+export const BotIntelligenceResponse = zod.object({
+  "available": zod.boolean(),
+  "decision": zod.union([zod.object({
+  "generated_at": zod.string(),
+  "expires_at": zod.string(),
+  "allow_long_entries": zod.boolean(),
+  "risk_level": zod.enum(['normal', 'guarded', 'elevated', 'high']),
+  "confidence": zod.number().min(botIntelligenceResponseDecisionOneConfidenceMin).max(botIntelligenceResponseDecisionOneConfidenceMax),
+  "reason": zod.string(),
+  "source_count": zod.number(),
+  "news_count": zod.number(),
+  "model": zod.string(),
+  "snapshot_hash": zod.string(),
+  "errors": zod.array(zod.string())
+}),zod.null()])
+})
+
+

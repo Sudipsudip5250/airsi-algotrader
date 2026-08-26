@@ -7,8 +7,8 @@ This guide walks you through every step — from cloning the repo to running you
 ## What You'll Need
 
 - **Git** — to clone the repo
-- **Python 3.10+** — the bot runs on Python
-- **Node.js 18+** (optional) — only if you want the dashboard
+- **Python 3.11+** — required by the supported dependency set
+- **Node.js 20+** (optional) — only if you want the dashboard
 - **Terminal** — all commands are run from the command line
 
 ---
@@ -53,7 +53,7 @@ cp .env.example .env
 
 Open `.env` in any text editor. Each setting has a comment explaining what it does.
 
-**For paper trading only**, most keys are optional. The only ones you might want:
+**For paper trading only**, most keys are optional. Telegram is disabled in the paper profiles by default; enable it locally only after setting both credentials. The optional settings are:
 - `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` — to get Telegram alerts
 - `GROQ_API_KEY` — to get AI commentary on trades
 
@@ -77,7 +77,7 @@ Do this every time you open a new terminal.
 ## Step 5: Verify
 
 ```bash
-cd bot && python3 -m pytest tests/ -v
+cd bot && python -m pytest tests/ -v
 ```
 
 All strategy and AI unit tests should pass with a green `PASSED` message. If any fail, inspect the first traceback and check the troubleshooting section in the README.
@@ -87,7 +87,7 @@ All strategy and AI unit tests should pass with a green `PASSED` message. If any
 ## Step 6: Download Data
 
 ```bash
-python3 scripts/download_data.py --days 30
+python scripts/download_data.py --days 30
 ```
 
 This downloads 30 days of 1h/4h/1d candle data from Binance for BTC/USDT and ETH/USDT. Data is stored in `bot/user_data/data/`.
@@ -97,7 +97,7 @@ This downloads 30 days of 1h/4h/1d candle data from Binance for BTC/USDT and ETH
 ## Step 7: Run a Backtest
 
 ```bash
-python3 scripts/run_backtest.py --days 30
+python scripts/run_backtest.py --days 30
 ```
 
 This tests the strategy against historical data. You'll see a summary table showing trades, profit, and win rate. If it shows 0 trades, the strategy conditions didn't trigger — this is normal for the default settings.
@@ -118,12 +118,14 @@ In a second terminal, start paper trading:
 bash scripts/run_bot.sh paper
 ```
 
-The bot starts with:
+Before starting, set `FREQTRADE_API_USER`, `FREQTRADE_API_PASS`, and `FREQTRADE_JWT_SECRET` in `.env`; the renderer rejects missing or sample credentials. The bot starts with:
 - **$1,000 virtual wallet** — play money
 - **$50 per trade** — virtual stake amount
 - **Max 2 open trades** — at any time
 - **REST API** — at `http://localhost:8080`
 - **Live price feed** — from Binance
+
+The intelligence worker is fail-closed for missing or stale snapshots. It can only veto new entries; it cannot place, cancel, or size trades.
 
 Let it run. Watch the terminal output. Press `Ctrl+C` to stop.
 

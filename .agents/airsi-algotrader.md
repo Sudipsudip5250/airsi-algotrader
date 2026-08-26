@@ -45,9 +45,9 @@ airsi-algotrader/
 bash install.sh
 cp .env.example .env
 source scripts/activate.sh
-cd bot && python3 -m pytest tests/ -v
-python3 scripts/download_data.py --days 30
-python3 scripts/run_backtest.py --days 30 --strategy AIRSIAlgoStrategy
+cd bot && python -m pytest tests/ -v
+python scripts/download_data.py --days 30
+python scripts/run_backtest.py --days 30 --strategy AIRSIAlgoStrategy
 freqtrade trade --config bot/config.paper.json --strategy AIRSIAlgoStrategy
 ```
 
@@ -63,4 +63,4 @@ Do not add network requests, LLM inference, mutable filesystem gates, or exchang
 
 ## Environment notes
 
-Python 3.11+ and Node.js 18+ are expected. `.env` is git-ignored; never place real credentials in tracked files. Freqtrade data, logs, and databases belong under the configured `bot/` user-data volume.
+Python 3.11+ and Node.js 20+ are expected. `.env` is git-ignored; never place real credentials in tracked files. Freqtrade data, logs, and databases belong under the configured `bot/` user-data volume.

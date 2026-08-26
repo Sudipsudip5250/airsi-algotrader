@@ -37,16 +37,22 @@ function Print-Error($msg) {
 
 # ── Step 1: Check Python ──────────────────────────────────────────────────────
 
-Print-Step "1/6" "Checking Python 3.10+"
+Print-Step "1/6" "Checking Python 3.11+"
 
+$pythonReady = $false
 if (Check-Command "python") {
-    $pyVersion = python --version 2>&1
-    Print-Skip "Python found: $pyVersion"
-} else {
+    $versionText = python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>$null
+    $parts = $versionText -split '\.'
+    if ($parts.Count -ge 2 -and [int]$parts[0] -eq 3 -and [int]$parts[1] -ge 11) {
+        $pythonReady = $true
+        Print-Skip "Python found: $(python --version 2>&1)"
+    }
+}
+if (-not $pythonReady) {
     Write-Host "  Python not found. Opening download page..." -ForegroundColor Yellow
     Start-Process "https://www.python.org/downloads/"
     Write-Host ""
-    Write-Host "  Please install Python 3.10 or newer, then re-run this script." -ForegroundColor Red
+    Write-Host "  Please install Python 3.11 or newer, then re-run this script." -ForegroundColor Red
     Write-Host "  IMPORTANT: Check 'Add Python to PATH' during installation!" -ForegroundColor Red
     Read-Host "  Press Enter after Python is installed"
 }
@@ -87,8 +93,8 @@ if (Test-Path $activateScript) {
 
 Print-Step "4/6" "Installing Python packages (this may take 2-5 minutes)"
 
-pip install --upgrade pip --quiet
-pip install -r bot/requirements.txt
+python -m pip install --upgrade pip --quiet
+python -m pip install -r bot/requirements.txt
 Print-OK "All Python packages installed"
 
 # ── Step 5: Install Node.js dependencies ──────────────────────────────────────
@@ -98,11 +104,11 @@ Print-Step "5/6" "Installing Node.js dependencies (dashboard)"
 if (Check-Command "node") {
     Print-OK "Node.js found: $(node --version)"
     if (Check-Command "pnpm") {
-        pnpm install
+        pnpm install --frozen-lockfile
         Print-OK "pnpm packages installed"
     } elseif (Check-Command "npm") {
         npm install -g pnpm
-        pnpm install
+        pnpm install --frozen-lockfile
         Print-OK "pnpm installed and packages installed"
     }
 } else {

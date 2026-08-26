@@ -53,7 +53,7 @@ bash scripts/run_intelligence.sh
 bash scripts/run_bot.sh paper
 ```
 
-The default paper profile uses `dry_run: true`, a virtual wallet, empty exchange credentials, and the shared dashboard API configuration. Do not change to live trading until the test, backtest, and paper-trading stages have been reviewed.
+The default paper profiles use `dry_run: true`, a virtual wallet, and environment-injected credentials. The live profile is `dry_run: false` but starts with `initial_state: "stopped"`; starting live trading is an explicit, separately reviewed action. Do not enable live trading until the test, backtest, and paper-trading stages have been reviewed.
 
 ## Configuration profiles
 
@@ -72,7 +72,7 @@ The optional fallback chain is **Groq → OpenRouter → Hugging Face → Ollama
 
 ## Safety controls
 
-The platform uses Freqtrade protections, a negative stoploss, ROI limits, a cooldown period, a stoploss guard, and a maximum-drawdown guard. The dashboard and Freqtrade API must be kept on a private network or behind an authenticated reverse proxy. Replace all sample credentials and secrets before any non-local deployment.
+The platform uses Freqtrade protections, a negative stoploss, ROI limits, a cooldown period, a stoploss guard, and a maximum-drawdown guard. The dashboard and Freqtrade API must be kept on a private network or behind an authenticated reverse proxy. The dashboard API only proxies read-only telemetry and validates its numeric limits and intelligence snapshot. Replace all sample credentials and secrets before any non-local deployment.
 
 ## Dashboard and services
 
@@ -84,7 +84,7 @@ The React dashboard is served through the Node.js/Express API proxy. The standar
 | AIRSI dashboard API | `http://localhost:5000` |
 | Optional Ollama | `http://localhost:11434` |
 
-Docker Compose starts the paper-trading stack. The optional Ollama service is enabled with the `local-ai` profile.
+Docker Compose starts the paper-trading stack after the required Freqtrade API credentials are supplied in `.env`. The optional Ollama service is enabled with the `local-ai` profile. The live compose path still requires an explicit `FREQTRADE_CONFIG_TEMPLATE` and the live profile starts stopped.
 
 ## Repository layout
 

@@ -18,6 +18,8 @@ export * from './botTradesParams';
 export * from './closedTrade';
 export * from './healthStatus';
 export * from './logLine';
+export * from './marketIntelligence';
+export * from './marketIntelligenceDecision';
 export * from './openTrade';
 export * from './pairPerformance';
 export * from './tradeList';

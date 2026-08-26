@@ -22,8 +22,21 @@ if [[ -f "$ROOT_DIR/.env" ]]; then
   set +a
 fi
 
+PYTHON_BIN="${PYTHON_BIN:-$ROOT_DIR/venv/bin/python}"
+if [[ ! -x "$PYTHON_BIN" ]]; then
+  PYTHON_BIN="$(command -v python3 || true)"
+fi
+if [[ -z "$PYTHON_BIN" ]]; then
+  echo "Python 3 is required. Run bash install.sh first." >&2
+  exit 1
+fi
+if ! command -v freqtrade >/dev/null 2>&1; then
+  echo "freqtrade is not installed or not on PATH. Activate venv or run bash install.sh first." >&2
+  exit 1
+fi
+
 OUTPUT="$ROOT_DIR/bot/user_data/config.${MODE}.rendered.json"
-python3 "$ROOT_DIR/scripts/render_config.py" "$CONFIG" "$OUTPUT"
+"$PYTHON_BIN" "$ROOT_DIR/scripts/render_config.py" "$CONFIG" "$OUTPUT"
 
 exec freqtrade trade \
   --config "$OUTPUT" \

@@ -25,6 +25,7 @@ import type {
   BotStatus,
   BotTradesParams,
   HealthStatus,
+  MarketIntelligence,
   PairPerformance,
   TradeList
 } from './api.schemas';
@@ -736,6 +737,83 @@ export function useBotConfig<TData = Awaited<ReturnType<typeof botConfig>>, TErr
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getBotConfigQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getBotIntelligenceUrl = () => {
+
+
+
+
+  return `/api/bot/intelligence`
+}
+
+/**
+ * @summary Latest market-intelligence risk decision
+ */
+export const botIntelligence = async ( options?: RequestInit): Promise<MarketIntelligence> => {
+
+  return customFetch<MarketIntelligence>(getBotIntelligenceUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getBotIntelligenceQueryKey = () => {
+    return [
+    `/api/bot/intelligence`
+    ] as const;
+    }
+
+
+export const getBotIntelligenceQueryOptions = <TData = Awaited<ReturnType<typeof botIntelligence>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof botIntelligence>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getBotIntelligenceQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof botIntelligence>>> = ({ signal }) => botIntelligence({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof botIntelligence>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type BotIntelligenceQueryResult = NonNullable<Awaited<ReturnType<typeof botIntelligence>>>
+export type BotIntelligenceQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Latest market-intelligence risk decision
+ */
+
+export function useBotIntelligence<TData = Awaited<ReturnType<typeof botIntelligence>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof botIntelligence>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getBotIntelligenceQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

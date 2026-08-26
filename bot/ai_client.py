@@ -148,10 +148,18 @@ class AIClient:
         )
 
     def complete(self, prompt: str, max_tokens: int = 200) -> str:
+        """Return commentary without allowing provider failures to escape."""
+        if not isinstance(prompt, str) or not prompt.strip():
+            return "AI analysis unavailable — trade execution remains unaffected."
+        max_tokens = max(1, min(int(max_tokens), 2_000))
         for provider in self._providers:
-            result = provider.complete(prompt, max_tokens)
-            if result:
-                return result
+            try:
+                result = provider.complete(prompt, max_tokens)
+            except Exception as exc:  # a custom provider must not break fallback
+                logger.warning("%s provider failed: %s", type(provider).__name__, exc)
+                continue
+            if isinstance(result, str) and result.strip():
+                return result.strip()
         return "AI analysis unavailable — trade execution remains unaffected."
 
     def explain_trade(

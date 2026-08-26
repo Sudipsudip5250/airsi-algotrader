@@ -16,26 +16,38 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
-
-
 def _send(text: str, parse_mode: str = "Markdown") -> bool:
-    """Send a message to Telegram. Returns True on success."""
-    if not BOT_TOKEN or not CHAT_ID:
+    """Send a bounded Telegram message without ever raising to the caller."""
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    if not bot_token or not chat_id:
         logger.warning("Telegram not configured — set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID")
         return False
+    payload = {"chat_id": chat_id, "text": str(text)[:4096]}
+    if parse_mode:
+        payload["parse_mode"] = parse_mode
     try:
-        resp = requests.post(
-            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-            json={"chat_id": CHAT_ID, "text": text, "parse_mode": parse_mode},
+        response = requests.post(
+            f"https://api.telegram.org/bot{bot_token}/sendMessage",
+            json=payload,
             timeout=10,
         )
-        resp.raise_for_status()
-        return True
+        if response.ok:
+            return True
+        # Markdown is user/content dependent; retry as plain text on parse errors.
+        if parse_mode and response.status_code == 400:
+            payload.pop("parse_mode", None)
+            fallback = requests.post(
+                f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                json=payload,
+                timeout=10,
+            )
+            if fallback.ok:
+                return True
+        response.raise_for_status()
     except Exception as exc:
         logger.error("Failed to send Telegram message: %s", exc)
-        return False
+    return False
 
 
 def notify_startup(dry_run: bool, pairs: list[str], stake: float) -> None:

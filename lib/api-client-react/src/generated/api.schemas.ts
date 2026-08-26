@@ -130,6 +130,29 @@ export interface BotLogs {
   log_count?: number;
 }
 
+export type MarketIntelligenceDecision = {
+  generated_at: string;
+  expires_at: string;
+  allow_long_entries: boolean;
+  risk_level: 'normal' | 'guarded' | 'elevated' | 'high';
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  confidence: number;
+  reason: string;
+  source_count: number;
+  news_count: number;
+  model: string;
+  snapshot_hash: string;
+  errors: string[];
+} | null;
+
+export interface MarketIntelligence {
+  available: boolean;
+  decision: MarketIntelligenceDecision;
+}
+
 export interface BotConfig {
   /** @nullable */
   strategy?: string | null;
