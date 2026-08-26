@@ -2,7 +2,7 @@
 
 A unified educational crypto trading platform built on [Freqtrade](https://freqtrade.io), with a deterministic regime-aware strategy, paper/live configuration profiles, optional AI commentary, Telegram alerts, and a React dashboard.
 
-> **Important:** This project is educational software. Cryptocurrency trading carries significant risk. Start with paper trading, validate with realistic fees and slippage, and never use money you cannot afford to lose.
+> **Important:** This project is **education and research software only**, not financial advice, an investment recommendation, or a promise of profit. Cryptocurrency trading carries significant risk. Start with paper trading, validate with realistic fees and slippage, and never use money you cannot afford to lose. The repository does not provide financial services, custody, signals for sale, or guaranteed returns.
 
 ## Product architecture
 
@@ -20,11 +20,11 @@ AIRSI AlgoTrader is now one trading codebase. The original research variants con
 
 The only production strategy is `AIRSIAlgoStrategy` in `bot/strategies/AIRSIAlgoStrategy.py`. It uses a 1-hour timeframe and a 240-candle warm-up period. The production default uses strict bullish pullbacks; the range branch remains available only for isolated research.
 
-| Regime | Entry branch | Purpose |
-|---|---|---|
-| Bullish trend | EMA9 > EMA21 > EMA50, EMA50/EMA200 spread > 0.5%, rising RSI pullback, volume above average | Participate only in selective controlled pullbacks |
-| Range | Stable EMA50/EMA200 spread, oversold RSI, lower Bollinger Band, adequate volume | Research-only branch; disabled in production by default after weaker backtest results |
-| Bearish trend | No long entry | Avoid averaging into sustained weakness |
+| Regime        | Entry branch                                                                                | Purpose                                                                               |
+| ------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Bullish trend | EMA9 > EMA21 > EMA50, EMA50/EMA200 spread > 0.5%, rising RSI pullback, volume above average | Participate only in selective controlled pullbacks                                    |
+| Range         | Stable EMA50/EMA200 spread, oversold RSI, lower Bollinger Band, adequate volume             | Research-only branch; disabled in production by default after weaker backtest results |
+| Bearish trend | No long entry                                                                               | Avoid averaging into sustained weakness                                               |
 
 The candle strategy itself remains deterministic and contains no network calls or LLM calls. A separate market-intelligence worker may veto new live/dry-run entries when deterministic market risk or structured news classification is elevated. It cannot place orders, choose pairs, set leverage, or increase position size. If its snapshot is missing or expired, the strategy fails closed.
 
@@ -57,12 +57,12 @@ The default paper profiles use `dry_run: true`, a virtual wallet, and environmen
 
 ## Configuration profiles
 
-| Profile | Purpose | Default safety state |
-|---|---|---|
-| `bot/config.paper.json` | Binance paper trading | `dry_run: true` |
-| `bot/config.paper.kraken.json` | Kraken paper trading | `dry_run: true` |
-| `bot/config.paper.okx.json` | OKX paper trading | `dry_run: true` |
-| `bot/config.live.json` | Explicit live deployment profile | `dry_run: false`; use only after independent review |
+| Profile                        | Purpose                          | Default safety state                                |
+| ------------------------------ | -------------------------------- | --------------------------------------------------- |
+| `bot/config.paper.json`        | Binance paper trading            | `dry_run: true`                                     |
+| `bot/config.paper.kraken.json` | Kraken paper trading             | `dry_run: true`                                     |
+| `bot/config.paper.okx.json`    | OKX paper trading                | `dry_run: true`                                     |
+| `bot/config.live.json`         | Explicit live deployment profile | `dry_run: false`; use only after independent review |
 
 All profiles use `AIRSIAlgoStrategy`. Exchange keys are environment-injected; withdrawal permission must remain disabled.
 
@@ -78,11 +78,11 @@ The platform uses Freqtrade protections, a negative stoploss, ROI limits, a cool
 
 The React dashboard is served through the Node.js/Express API proxy. The standard local endpoints are:
 
-| Service | URL |
-|---|---|
-| Freqtrade API/UI | `http://localhost:8080` |
-| AIRSI dashboard API | `http://localhost:5000` |
-| Optional Ollama | `http://localhost:11434` |
+| Service             | URL                      |
+| ------------------- | ------------------------ |
+| Freqtrade API/UI    | `http://localhost:8080`  |
+| AIRSI dashboard API | `http://localhost:5000`  |
+| Optional Ollama     | `http://localhost:11434` |
 
 Docker Compose starts the paper-trading stack after the required Freqtrade API credentials are supplied in `.env`. The optional Ollama service is enabled with the `local-ai` profile. The live compose path still requires an explicit `FREQTRADE_CONFIG_TEMPLATE` and the live profile starts stopped.
 
@@ -111,17 +111,29 @@ airsi-algotrader/
 
 ## Documentation
 
-| Topic | File |
-|---|---|
-| Strategy and regime selection | `docs/strategy.md` |
-| Setup | `docs/quickstart.md` |
-| Testing stages | `docs/testing.md` |
-| Dashboard | `docs/dashboard.md` |
-| API keys | `docs/api-keys.md` |
-| Local AI | `docs/local-ai-setup.md` |
-| Unified architecture | `docs/unified-architecture.md` |
+| Topic                                   | File                           |
+| --------------------------------------- | ------------------------------ |
+| Strategy and regime selection           | `docs/strategy.md`             |
+| Setup                                   | `docs/quickstart.md`           |
+| Testing stages                          | `docs/testing.md`              |
+| Dashboard                               | `docs/dashboard.md`            |
+| API keys                                | `docs/api-keys.md`             |
+| Local AI                                | `docs/local-ai-setup.md`       |
+| Unified architecture                    | `docs/unified-architecture.md` |
 | Performance research and loss diagnosis | `docs/performance-research.md` |
+| Education-only notice                   | `docs/education-only.md`       |
+| Security reporting                      | `SECURITY.md`                  |
+| Contribution rules                      | `CONTRIBUTING.md`              |
+| CI/CD and GitHub policy                 | `docs/ci-cd-policy.md`         |
+
+## Automated checks and repository policy
+
+Every push to `main` and every pull request targeting `main` runs Python tests and compilation, TypeScript typechecks, production builds, and a deterministic repository-policy gate. The policy gate rejects likely credentials, privileged workflow triggers, self-hosted runners, unpinned third-party Actions, and exchange-control commands inside workflows. Dependency review and CodeQL are configured separately for future changes.
+
+The workflows use least-privilege read permissions, no exchange or AI provider secrets, no `pull_request_target`, no self-hosted runners, and no automatic production deployment. CI/CD in this repository means **continuous validation and release-readiness checks**; any live-trading or production deployment remains a manual, independently reviewed operator action.
+
+Please do not use this repository to spam GitHub, mine cryptocurrency, bypass access controls, misrepresent performance, or publish credentials. Use GitHub secrets for any future automation credentials and keep exchange keys trade-only with withdrawals disabled. See [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), and [docs/education-only.md](docs/education-only.md).
 
 ## License
 
-MIT. Use, modify, and audit responsibly.
+MIT. Use, modify, and audit responsibly. The MIT license grants software permissions; it does not grant financial, legal, tax, investment, exchange, or regulatory advice. See the education-only notice for the project’s intended use and limitations.

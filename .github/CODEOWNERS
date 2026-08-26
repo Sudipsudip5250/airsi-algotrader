@@ -1,0 +1,10 @@
+# Require the repository owner to review automation and trading-safety boundaries.
+/.github/ @Sudipsudip5250
+/bot/config.live.json @Sudipsudip5250
+/bot/strategies/ @Sudipsudip5250
+/bot/market_intelligence.py @Sudipsudip5250
+/docker-compose.yml @Sudipsudip5250
+/scripts/ @Sudipsudip5250
+/SECURITY.md @Sudipsudip5250
+/CONTRIBUTING.md @Sudipsudip5250
+/docs/education-only.md @Sudipsudip5250
