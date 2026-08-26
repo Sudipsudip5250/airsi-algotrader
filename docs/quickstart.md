@@ -8,7 +8,7 @@ This guide walks you through every step — from cloning the repo to running you
 
 - **Git** — to clone the repo
 - **Python 3.11+** — required by the supported dependency set
-- **Node.js 20+** (optional) — only if you want the dashboard
+- **Node.js 22.13+** (optional) — only if you want the dashboard
 - **Terminal** — all commands are run from the command line
 
 ---

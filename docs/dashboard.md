@@ -6,7 +6,7 @@ The project includes a React dashboard with live trade monitoring, P&L charts, a
 
 ## Prerequisites
 
-- Node.js 20+ and pnpm installed
+- Node.js 22.13+ and pnpm installed
 - Freqtrade running (paper or live)
 - `FREQTRADE_API_USER`, `FREQTRADE_API_PASS`, and `FREQTRADE_JWT_SECRET` configured in `.env`
 

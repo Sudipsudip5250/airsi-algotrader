@@ -63,4 +63,4 @@ Do not add network requests, LLM inference, mutable filesystem gates, or exchang
 
 ## Environment notes
 
-Python 3.11+ and Node.js 20+ are expected. `.env` is git-ignored; never place real credentials in tracked files. Freqtrade data, logs, and databases belong under the configured `bot/` user-data volume.
+Python 3.11+ and Node.js 22.13+ are expected. `.env` is git-ignored; never place real credentials in tracked files. Freqtrade data, logs, and databases belong under the configured `bot/` user-data volume.
