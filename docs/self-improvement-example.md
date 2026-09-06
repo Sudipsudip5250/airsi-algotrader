@@ -49,4 +49,5 @@ The following is a shortened example of the JSON emitted by the first loop. Runt
 }
 ```
 
-An `inconclusive` result is deliberate when evidence is insufficient. The human-review command still records an explicit rationale, and any approved profile remains stopped and dry-run only.
+An `inconclusive` result is deliberate when evidence is insufficient or when the evaluator ran a dry no-op (no Freqtrade execution). The human-review command still records an explicit rationale, and any approved profile remains stopped and dry-run only.
+

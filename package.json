@@ -8,6 +8,7 @@
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
     "self-improvement:propose": "python agents/researcher.py",
+    "self-improvement:propose:ai": "python agents/researcher.py --use-ai",
     "self-improvement:evaluate": "python agents/evaluator.py",
     "self-improvement:review": "python agents/reviewer.py"
   },

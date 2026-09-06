@@ -72,7 +72,7 @@ All profiles use `AIRSIAlgoStrategy`. Exchange keys are environment-injected; wi
 
 ## AI commentary
 
-The optional fallback chain is **Groq → OpenRouter → Hugging Face → Ollama → plain text**. Provider failures do not stop the bot, and the strategy does not depend on a model response. AI output is commentary for operators, not a trading signal.
+The optional fallback chain is **Ollama (if running) → Groq free → Hugging Face free → OpenRouter `:free` models → plain text**. Paid models are skipped unless `AI_ALLOW_PAID=1`. Provider failures do not stop the bot, and the strategy does not depend on a model response. AI output is commentary for operators, not a trading signal. Logs include `provider=` and `cost_class=` (`free` / `low` / `paid`) so spend can be controlled.
 
 ## Safety controls
 

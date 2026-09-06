@@ -117,8 +117,10 @@ yarn-error.log*
 pnpm-debug.log*
 /typings
 
-# Local dev artifacts
-result-lib
+# Local self-improvement runtime (proposals/evaluations/decisions remain git-friendly)
+experiments/cache/
+experiments/agent-actions.jsonl
+experiments/QUEUE.md
 
 # Generated user data (freqtrade create-userdir at repo root)
 /user_data/

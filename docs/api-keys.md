@@ -13,6 +13,20 @@ All API keys are stored in `.env` (copied from `.env.example`).
 
 ---
 
+## AI provider order (free-first)
+
+Routine commentary and research use this order:
+
+1. **Ollama** — local, free, used only when `OLLAMA_BASE_URL` is reachable
+2. **Groq** — free tier (`GROQ_API_KEY`)
+3. **Hugging Face** — free tier (`HUGGINGFACE_API_KEY`)
+4. **OpenRouter** — only models whose id contains `:free`, unless `AI_ALLOW_PAID=1`
+5. **Plain text** — always available; the bot keeps trading
+
+Set `AI_ALLOW_PAID=1` only for a human-triggered, high-value call. Logs print `provider=` and `cost_class=` (`free` / `low` / `paid`).
+
+---
+
 ## AI: Groq (Free — 14,400 requests/day)
 
 1. Go to [console.groq.com](https://console.groq.com)
@@ -23,14 +37,15 @@ All API keys are stored in `.env` (copied from `.env.example`).
 
 ---
 
-## AI: OpenRouter (Free Tier)
+## AI: OpenRouter (free models only by default)
 
 1. Go to [openrouter.ai/keys](https://openrouter.ai/keys)
 2. Sign up free
 3. Click "Create Key"
 4. Copy key
-5. Default model: `deepseek/deepseek-chat` (free)
-6. Browse models at [openrouter.ai/models](https://openrouter.ai/models)
+5. Default model: `meta-llama/llama-3.1-8b-instruct:free`
+6. Paid models are skipped unless `AI_ALLOW_PAID=1`
+7. Browse models at [openrouter.ai/models](https://openrouter.ai/models)
 
 ---
 
@@ -40,13 +55,14 @@ All API keys are stored in `.env` (copied from `.env.example`).
 2. Sign up free
 3. Click "New Token" → role: "read"
 4. Copy key
-5. Default model: `mistralai/Mistral-7B-Instruct-v0.3`
+5. Default model: `HuggingFaceH4/zephyr-7b-beta`
 
 ---
 
-## AI: Ollama (Local, No Key Needed)
+## AI: Ollama (Local, No Key Needed) — preferred when running
 
 Run on the same machine or a VPS. See [local-ai-setup.md](local-ai-setup.md).
+The client probes `/api/tags` with a short timeout and skips Ollama when it is down, so a missing local daemon does not stall commentary.
 
 ---
 

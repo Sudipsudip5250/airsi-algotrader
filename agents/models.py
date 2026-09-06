@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import math
 import re
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, ClassVar
@@ -190,6 +190,8 @@ class HumanDecision:
         _text(self.rationale, "rationale")
         if not isinstance(self.apply_to_experimental, bool):
             raise SchemaError("apply_to_experimental must be boolean")
+        if self.apply_to_experimental and self.decision != "approve":
+            raise SchemaError("apply_to_experimental is valid only for approve")
         if self.applied_path is not None:
             path = _text(self.applied_path, "applied_path", max_length=256)
             if not path.startswith("experiments/experimental-profiles/") or "config.live" in path:
@@ -230,3 +232,11 @@ def read_json(path: Path, artifact_type: type[ExperimentProposal] | type[Evaluat
     except (OSError, json.JSONDecodeError) as exc:
         raise SchemaError(f"could not read {path}: {exc}") from exc
     return artifact_type.from_dict(payload)
+
+
+def update_proposal_status(path: Path, status: str) -> ExperimentProposal:
+    """Rewrite one proposal with a new status; never changes other fields."""
+    proposal = read_json(path, ExperimentProposal)
+    updated = replace(proposal, status=status)
+    write_json(path, updated)
+    return updated

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from datetime import datetime, timezone
@@ -17,6 +18,8 @@ PROPOSALS_DIR = ROOT / "proposals"
 EVALUATIONS_DIR = ROOT / "experiments" / "evaluations"
 DECISIONS_DIR = ROOT / "experiments" / "decisions"
 EXPERIMENTAL_PROFILES_DIR = ROOT / "experiments" / "experimental-profiles"
+CACHE_DIR = ROOT / "experiments" / "cache"
+QUEUE_MARKDOWN = ROOT / "experiments" / "QUEUE.md"
 _SECRET_PATTERN = re.compile(r"(?i)(token|secret|password|api[_-]?key)\s*[:=]\s*[^\s,}]+")
 
 
@@ -108,3 +111,10 @@ def latest_metrics(context: dict[str, Any]) -> dict[str, float]:
             if isinstance(item, dict) and isinstance(item.get("metrics"), dict):
                 return {key: float(value) for key, value in item["metrics"].items()}
     return {"expectancy": 0.0, "max_drawdown": 0.0, "number_of_trades": 0.0}
+
+
+def fingerprint_idea(proposal_type: str, title: str, changes: dict[str, Any]) -> str:
+    """Stable id for skipping redundant research on the same idea."""
+    payload = {"proposal_type": proposal_type, "title": title, "changes": changes}
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()[:16]

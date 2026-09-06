@@ -1,10 +1,9 @@
-from __future__ import annotations
-
 from datetime import datetime, timedelta, timezone
 
 from market_intelligence import (
     IntelligenceDecision,
     MarketSnapshot,
+    _llm_settings,
     deterministic_risk,
     read_decision,
     write_decision,
@@ -69,3 +68,30 @@ def test_naive_decision_timestamps_fail_closed(tmp_path):
         '"snapshot_hash":"abc123","errors":[]}'
     )
     assert read_decision(path) is None
+
+
+def test_llm_settings_skip_paid_openai_by_default(monkeypatch):
+    monkeypatch.delenv("AI_ALLOW_PAID", raising=False)
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.setenv("LLM_API_BASE", "https://api.openai.com/v1")
+    monkeypatch.setenv("LLM_API_KEY", "sk-test")
+    monkeypatch.setenv("LLM_MODEL", "gpt-5-mini")
+    monkeypatch.setattr("market_intelligence._ollama_available", lambda _url: False)
+    base, key, model, cost = _llm_settings()
+    assert key == ""
+    assert model == ""
+    assert cost == "free"
+
+
+def test_llm_settings_prefer_groq_free(monkeypatch):
+    monkeypatch.delenv("AI_ALLOW_PAID", raising=False)
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    monkeypatch.delenv("LLM_API_BASE", raising=False)
+    monkeypatch.setenv("GROQ_API_KEY", "gsk-test")
+    monkeypatch.setenv("GROQ_MODEL", "llama-3.1-8b-instant")
+    monkeypatch.setattr("market_intelligence._ollama_available", lambda _url: False)
+    base, key, model, cost = _llm_settings()
+    assert "groq.com" in base
+    assert key == "gsk-test"
+    assert model == "llama-3.1-8b-instant"
+    assert cost == "free"

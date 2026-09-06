@@ -23,6 +23,7 @@ const PAPER_TEMPLATE = join(ROOT, "bot", "config.paper.json");
 const MAX_LIMIT = 200;
 const ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_.-]{2,127}$/;
 const ALLOWED_DECISIONS = new Set(["approve", "reject", "request-more-data"]);
+const TERMINAL_DECISIONS = new Set(["approve", "reject"]);
 const ALLOWED_PROPOSAL_TYPES = new Set(["parameter_change", "test_idea", "documentation"]);
 const ALLOWED_PROPOSAL_STATUSES = new Set(["pending", "evaluated", "approved", "rejected", "applied"]);
 const ALLOWED_VERDICTS = new Set(["promising", "not_promising", "inconclusive", "not_run"]);
@@ -256,6 +257,8 @@ async function createExperimentalProfile(proposal: ExperimentProposal): Promise<
   for (const [key, rawValue] of Object.entries(changes)) {
     if (typeof rawValue !== "number" || !Number.isFinite(rawValue)) throw new Error(`change ${key} must be finite`);
     if (key === "max_open_trades") profile[key] = Math.max(1, Math.min(Math.trunc(rawValue), 10));
+    else if (key === "stake_amount") profile[key] = Math.max(1, Math.min(rawValue, 100));
+    else if (key === "dry_run_wallet") profile[key] = Math.max(100, Math.min(rawValue, 10_000));
     else if (key === "process_throttle_secs") {
       const internals = isRecord(profile.internals) ? profile.internals : {};
       profile.internals = { ...internals, process_throttle_secs: Math.max(1, Math.min(Math.trunc(rawValue), 60)) };
@@ -295,6 +298,9 @@ router.post("/experiments/:id/decision", async (req: Request, res: Response) => 
   const experiment = await loadExperiment(id);
   if (!experiment) return res.status(404).json({ error: "Experiment not found" });
   if (!experiment.evaluation) return res.status(409).json({ error: "Evaluate the proposal before recording a decision" });
+  if (experiment.decision && TERMINAL_DECISIONS.has(experiment.decision.decision)) {
+    return res.status(409).json({ error: "Proposal already has a terminal human decision" });
+  }
   const reviewer = (body && bodyText(body.reviewer, 256)) ?? "dashboard-operator";
   const rationale = (body && bodyText(body.note, 2_000)) ?? "Decision recorded from the dashboard.";
   const shouldApply = decisionValue === "approve" && body?.apply_experimental === true;

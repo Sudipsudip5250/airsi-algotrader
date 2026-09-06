@@ -10,7 +10,7 @@ There is one production strategy: `AIRSIAlgoStrategy`. It combines a bullish tre
 
 - **Trading:** Freqtrade and Python
 - **Strategy:** `bot/strategies/AIRSIAlgoStrategy.py`
-- **AI commentary:** Groq → OpenRouter → Hugging Face → Ollama → plain text
+- **AI commentary:** Ollama (if running) → Groq free → Hugging Face free → OpenRouter `:free` → plain text. Paid models require `AI_ALLOW_PAID=1`.
 - **Notifications:** Telegram Bot API
 - **Backend:** Node.js + Express proxy for the Freqtrade REST API
 - **Frontend:** React + Vite + Recharts + Tailwind

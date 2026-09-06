@@ -1,0 +1,35 @@
+{
+  "changes": {},
+  "created_at": "2026-09-04T15:44:51Z",
+  "evaluation_plan": {
+    "compare_against": "latest local backtest metrics",
+    "metrics": [
+      "expectancy",
+      "max_drawdown",
+      "number_of_trades"
+    ],
+    "minimum_trades": 10,
+    "mode": "dry_evaluation"
+  },
+  "hypothesis": "Without a metric snapshot, any parameter change would be unfalsifiable. A fresh local backtest export should be captured first.",
+  "proposal_id": "proposal-20260904T154451Z",
+  "proposal_type": "documentation",
+  "rationale": "Research proposal only; no production strategy file or live configuration is modified. Advisory note (none/free): AI commentary was intentionally disabled for this run.",
+  "schema_version": 1,
+  "source_summary": {
+    "ai_cached": false,
+    "ai_cost_class": "free",
+    "ai_provider": "none",
+    "backtests": [],
+    "baseline_metrics": {
+      "expectancy": 0.0,
+      "max_drawdown": 0.0,
+      "number_of_trades": 0.0
+    },
+    "fingerprint": "62bca64bc94fe3ae",
+    "paper_logs": []
+  },
+  "status": "rejected",
+  "target_config": "experiments/experimental-profiles/proposal-20260904T154451Z.json",
+  "title": "Collect a local backtest or paper-log sample before changing parameters"
+}

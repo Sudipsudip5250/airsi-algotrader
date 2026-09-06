@@ -1,5 +1,7 @@
 # Local AI Model Setup (VPS → PC)
 
+Ollama is the preferred free provider. When it is reachable, `bot/ai_client.py` uses it before Groq, Hugging Face, or OpenRouter. If Ollama is down, the client skips it after a 1.5s probe so commentary does not stall.
+
 Run Ollama on a VPS and connect your local trading bot to it.
 
 ## 1. Install Ollama on VPS

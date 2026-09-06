@@ -83,8 +83,11 @@ function ExperimentCard({
   onDecision: (decision: ExperimentDecisionInput["decision"]) => void;
   isSubmitting: boolean;
 }) {
-  const canDecide = Boolean(experiment.evaluation) && !experiment.decision;
+  const canDecide = Boolean(experiment.evaluation) && (!experiment.decision || experiment.decision.decision === "request-more-data");
   const decisionLabel = experiment.decision?.decision === "request-more-data" ? "More data requested" : experiment.decision?.decision;
+  const source = experiment.proposal.source_summary ?? {};
+  const provider = typeof source.ai_provider === "string" ? source.ai_provider : "none";
+  const costClass = typeof source.ai_cost_class === "string" ? source.ai_cost_class : "free";
 
   return (
     <article className="rounded-lg border border-border bg-card/60 shadow-sm transition-colors hover:border-primary/30">
@@ -95,6 +98,7 @@ function ExperimentCard({
             <span className="truncate font-medium">{experiment.proposal.title}</span>
             <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium capitalize", STATUS_STYLES[experiment.status])}>{experiment.status}</span>
             {experiment.evaluation && <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">{experiment.evaluation.verdict.replaceAll("_", " ")}</span>}
+            <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">{provider} · {costClass}</span>
           </span>
           <span className="mt-1 block truncate text-xs text-muted-foreground">{experiment.id} · created {formatDate(experiment.proposal.created_at)}</span>
         </span>
@@ -159,6 +163,7 @@ export default function Experiments() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [applyExperimental, setApplyExperimental] = useState<Record<string, boolean>>({});
+  const [filter, setFilter] = useState<"all" | ExperimentSummary["status"]>("all");
   const { data, isLoading, isError, isFetching, refetch } = useListExperiments({ limit: 200 });
   const decision = useDecideExperiment({
     mutation: {
@@ -166,6 +171,11 @@ export default function Experiments() {
     },
   });
   const experiments = data?.experiments ?? [];
+  const visible = filter === "all" ? experiments : experiments.filter((item) => item.status === filter);
+  const counts = experiments.reduce<Record<string, number>>((acc, item) => {
+    acc[item.status] = (acc[item.status] ?? 0) + 1;
+    return acc;
+  }, { all: experiments.length });
 
   const submitDecision = (experiment: ExperimentSummary, selected: ExperimentDecisionInput["decision"]) => {
     void decision.mutateAsync({
@@ -178,6 +188,8 @@ export default function Experiments() {
     });
   };
 
+  const filters: Array<"all" | ExperimentSummary["status"]> = ["all", "pending", "evaluated", "request-more-data", "approved", "rejected"];
+
   return (
     <div className="mx-auto flex h-full max-w-6xl flex-col p-4 sm:p-6">
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
@@ -188,7 +200,17 @@ export default function Experiments() {
         <button onClick={() => void refetch()} disabled={isFetching} className="inline-flex items-center gap-1.5 rounded-md border border-border bg-secondary px-3 py-2 text-xs transition-colors hover:bg-muted disabled:opacity-50"><RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin")} />Refresh</button>
       </div>
 
-      {isError ? <QueryError message="Unable to load experiment history. Check the API research-artifact mount and server logs." /> : isLoading ? <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading experiment history…</div> : experiments.length === 0 ? <div className="rounded-lg border border-dashed border-border bg-card/30"><QueryEmpty message="No experiment proposals yet. Run the offline researcher and evaluator to create reviewable artifacts." /></div> : <div className="space-y-3 overflow-auto pb-4">{experiments.map((experiment) => <ExperimentCard key={experiment.id} experiment={experiment} expanded={expanded.has(experiment.id)} onToggle={() => setExpanded((current) => { const next = new Set(current); if (next.has(experiment.id)) next.delete(experiment.id); else next.add(experiment.id); return next; })} note={notes[experiment.id] ?? ""} onNoteChange={(value) => setNotes((current) => ({ ...current, [experiment.id]: value }))} applyExperimental={applyExperimental[experiment.id] === true} onApplyChange={(value) => setApplyExperimental((current) => ({ ...current, [experiment.id]: value }))} onDecision={(selected) => submitDecision(experiment, selected)} isSubmitting={decision.isPending && decision.variables?.id === experiment.id} />)}</div>}
+      <div className="mb-4 flex flex-wrap gap-2">
+        {filters.map((value) => (
+          <button key={value} onClick={() => setFilter(value)} className={cn("rounded-full px-3 py-1.5 text-xs capitalize", filter === value ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground")}>
+            {value.replaceAll("-", " ")} ({value === "all" ? counts.all : counts[value] ?? 0})
+          </button>
+        ))}
+      </div>
+
+      {decision.isError && <QueryError message={decision.error instanceof Error ? decision.error.message : "Decision was rejected. Terminal approve/reject records cannot be overwritten."} />}
+
+      {isError ? <QueryError message="Unable to load experiment history. Check the API research-artifact mount and server logs." /> : isLoading ? <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading experiment history…</div> : visible.length === 0 ? <div className="rounded-lg border border-dashed border-border bg-card/30"><QueryEmpty message="No experiment proposals in this filter. Run the offline researcher and evaluator, or switch filters to inspect history." /></div> : <div className="space-y-3 overflow-auto pb-4">{visible.map((experiment) => <ExperimentCard key={experiment.id} experiment={experiment} expanded={expanded.has(experiment.id)} onToggle={() => setExpanded((current) => { const next = new Set(current); if (next.has(experiment.id)) next.delete(experiment.id); else next.add(experiment.id); return next; })} note={notes[experiment.id] ?? ""} onNoteChange={(value) => setNotes((current) => ({ ...current, [experiment.id]: value }))} applyExperimental={applyExperimental[experiment.id] === true} onApplyChange={(value) => setApplyExperimental((current) => ({ ...current, [experiment.id]: value }))} onDecision={(selected) => submitDecision(experiment, selected)} isSubmitting={decision.isPending && decision.variables?.id === experiment.id} />)}</div>}
 
       <p className="mt-auto border-t border-border/60 pt-3 text-xs text-muted-foreground">Educational use only. Approval creates at most a stopped dry-run experimental profile; it never promotes code or changes paper/live configuration.</p>
     </div>
