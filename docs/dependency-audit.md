@@ -24,11 +24,12 @@ source venv/bin/activate
 pip-audit -r bot/requirements.txt --progress-spinner off
 pip-audit --progress-spinner off
 pnpm install --frozen-lockfile
-pnpm audit --prod
+pnpm audit --prod --audit-level high
+# Optional local check of the complete graph (codegen/dev tooling may still report advisories):
 pnpm audit --audit-level high
 ```
 
-The mandatory CI workflow now runs the Python audit and a high-severity pnpm production audit on future changes. Dependabot and dependency-review provide additional update and pull-request checks. The workspace keeps a minimum package release age and full lockfile integrity checks; do not bypass those controls for convenience.
+The mandatory CI workflow now runs the Python audit and `pnpm audit --prod --audit-level high` on future changes. A full-graph `pnpm audit` is not a merge gate because codegen/dev tooling (for example orval → fast-uri) can fail high/critical while production dependencies stay clean. Dependabot and dependency-review provide additional update and pull-request checks. Dependency-review requires GitHub Dependency graph to be enabled on the repository (`Settings → Code security → Dependency graph`); that is a repo setting, not a workflow file change. The workspace keeps a minimum package release age and full lockfile integrity checks; do not bypass those controls for convenience.
 
 ## Limitations
 

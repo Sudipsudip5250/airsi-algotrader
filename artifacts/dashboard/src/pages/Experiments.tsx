@@ -36,6 +36,20 @@ function formatMetric(value: number | undefined) {
   return typeof value === "number" && Number.isFinite(value) ? value.toFixed(4) : "—";
 }
 
+function evaluationKind(evaluation: ExperimentSummary["evaluation"]): string {
+  if (!evaluation) {
+    return "Not evaluated";
+  }
+  const version = evaluation.evaluator_version ?? "";
+  if (evaluation.verdict === "not_run") {
+    return "Limited backtest (not run)";
+  }
+  if (version.includes("limited-backtest")) {
+    return "Limited backtest";
+  }
+  return "Dry evaluation";
+}
+
 function Metric({ label, value, tone }: { label: string; value: number | undefined; tone?: string }) {
   return (
     <div className="rounded-md border border-border/70 bg-background/40 p-3">
@@ -97,6 +111,7 @@ function ExperimentCard({
           <span className="flex flex-wrap items-center gap-2">
             <span className="truncate font-medium">{experiment.proposal.title}</span>
             <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium capitalize", STATUS_STYLES[experiment.status])}>{experiment.status}</span>
+            {experiment.evaluation && <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">{evaluationKind(experiment.evaluation)}</span>}
             {experiment.evaluation && <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">{experiment.evaluation.verdict.replaceAll("_", " ")}</span>}
             <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">{provider} · {costClass}</span>
           </span>
@@ -131,7 +146,9 @@ function ExperimentCard({
             </div>
             <div className="space-y-3">
               <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Evaluation metrics</p>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Evaluation metrics · {evaluationKind(experiment.evaluation)}
+                </p>
                 <Metrics experiment={experiment} />
               </div>
               {experiment.evaluation?.notes && <p className="text-xs text-muted-foreground">{experiment.evaluation.notes}</p>}

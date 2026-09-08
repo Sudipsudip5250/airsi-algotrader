@@ -201,6 +201,13 @@ PAGE = r"""<!DOCTYPE html>
     };
     const pill = (status) => `<span class="pill ${pillClass(status)}">${escape(status)}</span>`;
     const num = (value) => (typeof value === 'number' && Number.isFinite(value) ? value.toFixed(4) : '—');
+    const evalKind = (evaluation) => {
+      if (!evaluation) return 'Not evaluated';
+      const version = evaluation.evaluator_version || '';
+      if (evaluation.verdict === 'not_run') return 'Limited backtest (not run)';
+      if (version.indexOf('limited-backtest') >= 0) return 'Limited backtest';
+      return 'Dry evaluation';
+    };
     const showError = (message) => {
       const node = document.getElementById('error');
       node.style.display = message ? 'block' : 'none';
@@ -241,7 +248,7 @@ PAGE = r"""<!DOCTYPE html>
         const summary = item.proposal.source_summary || {};
         const changes = escape(JSON.stringify(item.proposal.changes || {}, null, 2));
         return `<article>
-          <div class="row">${pill(item.status)} ${evaluation ? pill(evaluation.verdict) : ''}
+          <div class="row">${pill(item.status)} ${evaluation ? pill(evalKind(evaluation)) : ''} ${evaluation ? pill(evaluation.verdict) : ''}
             <span class="pill">${escape(item.proposal.proposal_type)}</span>
             <span class="pill blue">${escape(summary.ai_provider || 'none')} / ${escape(summary.ai_cost_class || 'free')}</span></div>
           <h2>${escape(item.proposal.title)}</h2>

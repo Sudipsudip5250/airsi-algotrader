@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -295,4 +296,173 @@ def test_decide_rejects_missing_evaluation_and_terminal_overwrite(
     assert reviewer.decide(f"{proposal.proposal_id}.json", "reject", "Reviewer", "Still insufficient evidence.", False) == 0
     with pytest.raises(ValueError, match="terminal human decision"):
         reviewer.decide(f"{proposal.proposal_id}.json", "approve", "Reviewer", "Should not overwrite.", False)
+
+
+def test_extract_metrics_prefers_relative_drawdown_and_comparison_list() -> None:
+    assert extract_metrics(
+        {
+            "strategy": {
+                "AIRSIAlgoStrategy": {
+                    "total_trades": 10,
+                    "profit_total": 2.0,
+                    "max_relative_drawdown": 0.08,
+                    "max_drawdown": 80.0,
+                }
+            }
+        }
+    ) == {"expectancy": 0.2, "max_drawdown": 0.08, "number_of_trades": 10.0}
+    assert extract_metrics(
+        {
+            "strategy_comparison": [
+                {"key": "AIRSIAlgoStrategy", "trades": 10, "profit_total": 2.0, "max_drawdown_account": 0.04}
+            ]
+        }
+    ) == {"expectancy": 0.2, "max_drawdown": 0.04, "number_of_trades": 10.0}
+    assert extract_metrics({"strategy": {"AIRSIAlgoStrategy": {"profit_total": 1}}}) is None
+
+
+def test_metrics_from_zip_export(tmp_path: Path) -> None:
+    from agents.evaluator import _metrics_from_backtest
+
+    payload = {
+        "strategy": {
+            "AIRSIAlgoStrategy": {"total_trades": 8, "profit_total": 4.0, "max_drawdown": 0.2},
+        }
+    }
+    zip_path = tmp_path / "backtest-result.zip"
+    with zipfile.ZipFile(zip_path, "w") as archive:
+        archive.writestr("backtest-result_config.json", json.dumps({"dry_run": True}))
+        archive.writestr("backtest-result.json", json.dumps(payload))
+    assert _metrics_from_backtest(zip_path) == {
+        "expectancy": 0.5,
+        "max_drawdown": 0.2,
+        "number_of_trades": 8.0,
+    }
+
+
+def test_limited_backtest_without_data_is_fail_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    from agents import evaluator
+
+    monkeypatch.setattr(evaluator.shutil, "which", lambda _: "/usr/bin/freqtrade")
+    monkeypatch.setattr(evaluator, "has_local_ohlcv", lambda data_dir=None: False)
+    proposal = ExperimentProposal(
+        proposal_id="proposal-test-nodata",
+        created_at="2026-01-01T00:00:00Z",
+        title="Halve stake",
+        hypothesis="Smaller stake.",
+        proposal_type="parameter_change",
+        target_config="experiments/experimental-profiles/proposal-test-nodata.json",
+        changes={"stake_amount": 25.0},
+    )
+    metrics, reason = run_limited_backtest(proposal, 30)
+    assert metrics is None
+    assert "no local market data" in reason
+    result = evaluate_proposal(proposal, run_backtest=True, days=30)
+    assert result.verdict == "not_run"
+    assert result.evaluator_version == "phase-b-limited-backtest-1"
+    assert "production files were not modified" in result.notes
+
+
+def test_preflight_refuses_protected_configs() -> None:
+    from agents.evaluator import assert_experimental_target
+
+    with pytest.raises(ValueError, match="protected"):
+        assert_experimental_target("bot/config.paper.json")
+    with pytest.raises(ValueError, match="protected"):
+        assert_experimental_target("bot/config.live.json")
+
+
+def test_temporary_config_leaves_paper_and_live_untouched(tmp_path: Path) -> None:
+    from agents.evaluator import PAPER_TEMPLATE, ROOT, _temporary_experimental_config
+
+    paper_before = PAPER_TEMPLATE.read_text(encoding="utf-8")
+    live = ROOT / "bot" / "config.live.json"
+    live_before = live.read_text(encoding="utf-8") if live.exists() else None
+    proposal = ExperimentProposal(
+        proposal_id="proposal-test-tempconfig",
+        created_at="2026-01-01T00:00:00Z",
+        title="Halve stake",
+        hypothesis="Smaller stake.",
+        proposal_type="parameter_change",
+        target_config="experiments/experimental-profiles/proposal-test-tempconfig.json",
+        changes={"stake_amount": 25.0},
+    )
+    path = _temporary_experimental_config(proposal, tmp_path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert path.parent == tmp_path
+    assert payload["dry_run"] is True
+    assert payload["initial_state"] == "stopped"
+    assert payload["force_entry_enable"] is False
+    assert payload["stake_amount"] == 25.0
+    assert PAPER_TEMPLATE.read_text(encoding="utf-8") == paper_before
+    if live_before is not None:
+        assert live.read_text(encoding="utf-8") == live_before
+
+
+def test_collect_context_includes_local_evaluations_and_decisions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from agents import context
+
+    evaluations = tmp_path / "evaluations"
+    decisions = tmp_path / "decisions"
+    evaluations.mkdir()
+    decisions.mkdir()
+    (evaluations / "proposal-local-eval.json").write_text(
+        json.dumps(
+            {
+                "proposal_id": "proposal-local-eval",
+                "verdict": "inconclusive",
+                "evaluator_version": "phase-a-dry-evaluator-1",
+                "notes": "dry only",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (decisions / "proposal-local-eval.json").write_text(
+        json.dumps(
+            {
+                "proposal_id": "proposal-local-eval",
+                "decision": "reject",
+                "reviewer": "Reviewer",
+                "rationale": "Need a longer window.",
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(context, "EVALUATIONS_DIR", evaluations)
+    monkeypatch.setattr(context, "DECISIONS_DIR", decisions)
+    monkeypatch.setattr(context, "BACKTEST_DIR", tmp_path / "missing-backtests")
+    monkeypatch.setattr(context, "LOG_DIR", tmp_path / "missing-logs")
+    collected = context.collect_context()
+    assert collected["evaluations"][0]["verdict"] == "inconclusive"
+    assert collected["decisions"][0]["decision"] == "reject"
+    proposal = build_proposal(collected, use_ai=False)
+    assert proposal.source_summary["recent_evaluations"][0]["proposal_id"] == "proposal-local-eval"
+
+
+def test_reviewer_status_prints_local_counts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    from agents import reviewer
+
+    proposals = tmp_path / "proposals"
+    proposals.mkdir()
+    monkeypatch.setattr(reviewer, "PROPOSALS_DIR", proposals)
+    monkeypatch.setattr(reviewer, "EVALUATIONS_DIR", tmp_path / "evaluations")
+    monkeypatch.setattr(reviewer, "DECISIONS_DIR", tmp_path / "decisions")
+    (tmp_path / "evaluations").mkdir()
+    (tmp_path / "decisions").mkdir()
+    proposal = ExperimentProposal(
+        proposal_id="proposal-test-status",
+        created_at="2026-01-01T00:00:00Z",
+        title="Status check",
+        hypothesis="Queue counts should stay local.",
+        proposal_type="test_idea",
+        target_config="experiments/experimental-profiles/proposal-test-status.json",
+    )
+    write_json(proposals / f"{proposal.proposal_id}.json", proposal)
+    assert reviewer.print_status() == 0
+    output = capsys.readouterr().out
+    assert "proposals=1" in output
+    assert "pending=1" in output
+    assert "none" in output
 

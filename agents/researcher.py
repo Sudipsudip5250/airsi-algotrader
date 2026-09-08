@@ -227,6 +227,8 @@ def build_proposal(context: dict[str, object], use_ai: bool) -> ExperimentPropos
         source_summary={
             "backtests": context.get("backtests", []),
             "paper_logs": context.get("paper_logs", []),
+            "recent_evaluations": context.get("evaluations", []),
+            "recent_decisions": context.get("decisions", []),
             "baseline_metrics": metrics,
             "fingerprint": fingerprint,
             "ai_provider": advisory["provider"],
@@ -285,7 +287,12 @@ def main() -> int:
         ai_cost_class=proposal.source_summary.get("ai_cost_class"),
         ai_cached=proposal.source_summary.get("ai_cached"),
         fingerprint=fingerprint,
-        context_files=len(context.get("backtests", [])) + len(context.get("paper_logs", [])),
+        context_files=(
+            len(context.get("backtests", []))
+            + len(context.get("paper_logs", []))
+            + len(context.get("evaluations", []))
+            + len(context.get("decisions", []))
+        ),
     )
     print(json.dumps(proposal.to_dict(), indent=2, sort_keys=True))
     print(

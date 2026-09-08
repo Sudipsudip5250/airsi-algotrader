@@ -4,42 +4,59 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import shutil
 import subprocess
 import sys
 import tempfile
+import zipfile
+from datetime import date, timedelta
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from agents.context import BACKTEST_DIR, EVALUATIONS_DIR, PROPOSALS_DIR, safe_artifact_path
+from agents.context import BACKTEST_DIR, EVALUATIONS_DIR, PROPOSALS_DIR, extract_metrics, safe_artifact_path
 from agents.models import EvaluationResult, ExperimentProposal, read_json, update_proposal_status, utc_now, write_json
 from agents.runtime import log_action
 
 PAPER_TEMPLATE = ROOT / "bot" / "config.paper.json"
+DATA_DIR = ROOT / "bot" / "user_data" / "data"
 _PROTECTED = {"bot/config.paper.json", "bot/config.live.json"}
+_OHLCV_GLOBS = ("*.feather", "*.json", "*.parquet", "*.json.gz")
+extract_backtest_metrics = extract_metrics
+
+
+def _load_json_payload(path: Path) -> dict[str, Any] | None:
+    try:
+        if path.suffix == ".zip":
+            with zipfile.ZipFile(path) as archive:
+                names = [name for name in archive.namelist() if name.endswith(".json")]
+                preferred = [
+                    name
+                    for name in names
+                    if not Path(name).name.endswith(".meta.json") and "config" not in Path(name).name.lower()
+                ]
+                for name in preferred or names:
+                    payload: Any = json.loads(archive.read(name))
+                    if isinstance(payload, dict) and extract_backtest_metrics(payload) is not None:
+                        return payload
+                return None
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, zipfile.BadZipFile, UnicodeDecodeError, KeyError):
+        return None
+    return payload if isinstance(payload, dict) else None
 
 
 def _metrics_from_backtest(path: Path) -> dict[str, float] | None:
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        values = payload.get("strategy", {})
-        result = next(iter(values.values())) if isinstance(values, dict) and values else {}
-        trades = float(result.get("total_trades", 0))
-        profit = float(result.get("profit_total", 0.0))
-        drawdown = float(result.get("max_drawdown", 0.0))
-    except (OSError, json.JSONDecodeError, TypeError, ValueError, StopIteration):
-        return None
-    if trades < 0 or not all(value == value for value in (profit, drawdown)):
-        return None
-    return {
-        "expectancy": profit / trades if trades else 0.0,
-        "max_drawdown": max(0.0, drawdown),
-        "number_of_trades": trades,
-    }
+    for candidate in (path, path.with_suffix(".zip")):
+        if not candidate.exists() or not candidate.is_file():
+            continue
+        metrics = extract_backtest_metrics(_load_json_payload(candidate))
+        if metrics is not None:
+            return metrics
+    return None
 
 
 def _load_baseline(proposal: ExperimentProposal, requested: str | None) -> tuple[dict[str, float], str]:
@@ -59,7 +76,11 @@ def _load_baseline(proposal: ExperimentProposal, requested: str | None) -> tuple
         except (KeyError, TypeError, ValueError):
             pass
 
-    for path in sorted(BACKTEST_DIR.glob("*.json"), key=lambda item: item.stat().st_mtime, reverse=True):
+    exports: list[Path] = []
+    if BACKTEST_DIR.exists():
+        exports = [path for path in BACKTEST_DIR.iterdir() if path.suffix in {".json", ".zip"} and path.is_file()]
+        exports.sort(key=lambda item: item.stat().st_mtime, reverse=True)
+    for path in exports:
         metrics = _metrics_from_backtest(path)
         if metrics is not None:
             return metrics, str(path.relative_to(ROOT))
@@ -109,9 +130,34 @@ def evaluate(
     )
 
 
-def _temporary_experimental_config(proposal: ExperimentProposal) -> Path:
-    if proposal.target_config in _PROTECTED or "config.live" in proposal.target_config:
+def assert_experimental_target(target: str) -> None:
+    if target in _PROTECTED or "config.live" in target or target == "bot/config.paper.json":
         raise ValueError("refusing to backtest against a protected configuration")
+
+
+def has_local_ohlcv(data_dir: Path = DATA_DIR) -> bool:
+    if not data_dir.exists():
+        return False
+    return any(any(data_dir.rglob(pattern)) for pattern in _OHLCV_GLOBS)
+
+
+def preflight_limited_backtest(proposal: ExperimentProposal, data_dir: Path = DATA_DIR) -> str | None:
+    """Return a skip reason, or None if a limited backtest may run."""
+    try:
+        assert_experimental_target(proposal.target_config)
+    except ValueError as exc:
+        return str(exc)
+    if shutil.which("freqtrade") is None:
+        return "freqtrade is not installed. Activate the project environment, then retry --run-backtest."
+    if not has_local_ohlcv(data_dir):
+        return "no local market data under bot/user_data/data. Run: python scripts/download_data.py --days 30"
+    if not PAPER_TEMPLATE.exists():
+        return f"paper template missing: {PAPER_TEMPLATE}"
+    return None
+
+
+def _temporary_experimental_config(proposal: ExperimentProposal, directory: Path) -> Path:
+    assert_experimental_target(proposal.target_config)
     if not PAPER_TEMPLATE.exists():
         raise FileNotFoundError(PAPER_TEMPLATE)
     payload = json.loads(PAPER_TEMPLATE.read_text(encoding="utf-8"))
@@ -128,15 +174,9 @@ def _temporary_experimental_config(proposal: ExperimentProposal) -> Path:
             payload[key] = max(100.0, min(float(value), 10_000.0))
         elif key == "process_throttle_secs":
             payload.setdefault("internals", {})[key] = max(1, min(int(value), 60))
-    handle = tempfile.NamedTemporaryFile(
-        prefix=f"eval-{proposal.proposal_id}-",
-        suffix=".json",
-        dir=ROOT / "bot" / "user_data",
-        delete=False,
-    )
-    Path(handle.name).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    handle.close()
-    return Path(handle.name)
+    output = directory / f"eval-{proposal.proposal_id}.json"
+    output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return output
 
 
 def run_limited_backtest(proposal: ExperimentProposal, days: int) -> tuple[dict[str, float] | None, str]:
@@ -145,16 +185,14 @@ def run_limited_backtest(proposal: ExperimentProposal, days: int) -> tuple[dict[
     Never writes to default paper or live profiles. Missing freqtrade/data is
     fail-closed and returns not_run rather than inventing metrics.
     """
-    if shutil.which("freqtrade") is None:
-        return None, "freqtrade is not installed"
-    data_dir = ROOT / "bot" / "user_data" / "data"
-    if not any(data_dir.rglob("*.feather")) and not any(data_dir.rglob("*.json")) and not any(data_dir.rglob("*.parquet")):
-        return None, "no local market data under bot/user_data/data"
-    config_path = _temporary_experimental_config(proposal)
-    export_path = ROOT / "bot" / "user_data" / "backtest_results" / f"eval-{proposal.proposal_id}.json"
+    reason = preflight_limited_backtest(proposal)
+    if reason:
+        return None, reason
+    BACKTEST_DIR.mkdir(parents=True, exist_ok=True)
+    export_path = BACKTEST_DIR / f"eval-{proposal.proposal_id}.json"
+    tmpdir = Path(tempfile.mkdtemp(prefix="airsi-eval-"))
     try:
-        from datetime import date, timedelta
-
+        config_path = _temporary_experimental_config(proposal, tmpdir)
         end = date.today()
         start = end - timedelta(days=max(7, min(days, 90)))
         timerange = f"{start.strftime('%Y%m%d')}-{end.strftime('%Y%m%d')}"
@@ -172,7 +210,7 @@ def run_limited_backtest(proposal: ExperimentProposal, days: int) -> tuple[dict[
             "--timerange",
             timerange,
             "--datadir",
-            str(data_dir),
+            str(DATA_DIR),
             "--userdir",
             str(ROOT / "bot" / "user_data"),
             "--export",
@@ -184,15 +222,22 @@ def run_limited_backtest(proposal: ExperimentProposal, days: int) -> tuple[dict[
         if completed.returncode != 0:
             snippet = (completed.stderr or completed.stdout or "freqtrade failed")[-500:]
             return None, f"limited backtest failed: {snippet}"
-        metrics = _metrics_from_backtest(export_path) if export_path.exists() else None
-        if metrics is None:
-            return None, "limited backtest produced no parseable metrics"
-        return metrics, str(export_path.relative_to(ROOT))
+        scoped = [export_path, export_path.with_suffix(".zip")]
+        scoped.extend(sorted(BACKTEST_DIR.glob(f"eval-{proposal.proposal_id}*"), key=lambda item: item.stat().st_mtime, reverse=True))
+        seen: set[Path] = set()
+        for path in scoped:
+            resolved = path.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            metrics = _metrics_from_backtest(path)
+            if metrics is not None:
+                return metrics, str(path.relative_to(ROOT)) if path.is_relative_to(ROOT) else str(path)
+        return None, "limited backtest produced no parseable metrics"
+    except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+        return None, f"limited backtest failed: {exc}"
     finally:
-        try:
-            os.unlink(config_path)
-        except OSError:
-            pass
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 def evaluate_proposal(
@@ -207,7 +252,10 @@ def evaluate_proposal(
     baseline, source = _load_baseline(proposal, backtest_results)
     if not run_backtest:
         return evaluate(proposal, baseline, source, minimum_trades)
-    candidate, backtest_source = run_limited_backtest(proposal, days)
+    try:
+        candidate, backtest_source = run_limited_backtest(proposal, days)
+    except Exception as exc:  # fail-closed: never invent metrics
+        candidate, backtest_source = None, f"{type(exc).__name__}: {exc}"
     if candidate is None:
         return EvaluationResult(
             proposal_id=proposal.proposal_id,
@@ -232,7 +280,7 @@ def persist_evaluation(proposal_path: Path, result: EvaluationResult) -> Path:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Evaluate one proposal without touching production files")
     parser.add_argument("proposal", help="Proposal JSON filename under proposals/")
-    parser.add_argument("--backtest-results", help="Optional repository-local Freqtrade export JSON")
+    parser.add_argument("--backtest-results", help="Optional repository-local Freqtrade export JSON or zip")
     parser.add_argument("--minimum-trades", type=int, default=10)
     parser.add_argument(
         "--run-backtest",

@@ -118,7 +118,7 @@ def load_summaries() -> list[dict[str, Any]]:
         evaluation = _evaluation_for(proposal.proposal_id)
         decision = _decision_for(proposal.proposal_id)
         if decision and decision.decision in _TERMINAL_DECISIONS:
-            status = "applied" if decision.apply_to_experimental else decision.decision
+            status = "applied" if decision.apply_to_experimental else _STATUS_FOR_DECISION[decision.decision]
         elif decision and decision.decision == "request-more-data":
             status = "request-more-data"
         elif evaluation:
@@ -192,6 +192,42 @@ def list_queue() -> int:
     return 0
 
 
+def print_status() -> int:
+    """Print local queue counts and recent decisions. Makes no network calls."""
+    items = load_summaries()
+    counts: dict[str, int] = {}
+    for item in items:
+        status = str(item.get("status") or "unknown")
+        counts[status] = counts.get(status, 0) + 1
+    print("QUEUE")
+    print(
+        f"proposals={len(items)} "
+        f"pending={counts.get('pending', 0)} "
+        f"evaluated={counts.get('evaluated', 0)} "
+        f"request-more-data={counts.get('request-more-data', 0)} "
+        f"approved={counts.get('approved', 0)} "
+        f"applied={counts.get('applied', 0)} "
+        f"rejected={counts.get('rejected', 0)}"
+    )
+    print("\nRECENT DECISIONS")
+    decisions = [item for item in items if isinstance(item.get("decision"), dict)]
+    decisions.sort(key=lambda item: str((item.get("decision") or {}).get("decided_at") or ""), reverse=True)
+    if not decisions:
+        print("none")
+        return 0
+    print("PROPOSAL_ID\tDECISION\tREVIEWER\tRATIONALE")
+    for item in decisions[:8]:
+        decision = item["decision"]
+        rationale = str(decision.get("rationale") or "").replace("\t", " ").replace("\n", " ")[:80]
+        print(
+            f"{decision.get('proposal_id') or item['id']}\t"
+            f"{decision.get('decision')}\t"
+            f"{decision.get('reviewer')}\t"
+            f"{rationale}"
+        )
+    return 0
+
+
 def decide(proposal_name: str, decision: str, reviewer: str, rationale: str, apply_experimental: bool) -> int:
     proposal_path = safe_artifact_path(PROPOSALS_DIR, Path(proposal_name).name)
     proposal = read_json(proposal_path, ExperimentProposal)
@@ -241,6 +277,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Review offline self-improvement proposals")
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("list", help="List pending and decided proposals")
+    subparsers.add_parser("status", help="Print queue counts and recent decisions (local artifacts only)")
     decide_parser = subparsers.add_parser("decide", help="Record a human decision for one evaluated proposal")
     decide_parser.add_argument("proposal", help="Proposal JSON filename under proposals/")
     decide_parser.add_argument("decision", choices=("approve", "reject", "request-more-data"))
@@ -250,6 +287,8 @@ def main() -> int:
     args = parser.parse_args()
     if args.command == "list":
         return list_queue()
+    if args.command == "status":
+        return print_status()
     try:
         return decide(args.proposal, args.decision, args.reviewer, args.rationale, args.apply_experimental)
     except (OSError, ValueError, TypeError) as exc:
