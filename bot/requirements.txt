@@ -1,4 +1,4 @@
-freqtrade==2026.7
+freqtrade==2026.8
 groq==1.7.0
 requests==2.34.2
 python-telegram-bot==22.8
