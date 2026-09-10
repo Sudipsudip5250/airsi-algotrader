@@ -20,7 +20,13 @@ All third-party Actions are pinned to full commit SHAs. Workflows do not use `pu
 
 The repository is public, has a detectable MIT license, and now includes `README.md`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, and `SECURITY.md`. At the time of this change, GitHub reported that Actions were enabled, repository-level branch protection was not configured, and repository push protection/security-policy status was not enabled. These are repository settings, not account-profile changes.
 
-For stronger future protection, the owner should review the repository’s Actions settings and choose a policy that permits only trusted GitHub Actions used here. The owner should also enable “Require actions to be pinned to a full-length commit SHA” if available, enable secret scanning/push protection where the plan permits, and protect `main` by requiring the `CI`, `Repository policy`, `Dependency review`, and `CodeQL` checks before merge. Do not add exchange, Telegram, AI-provider, or personal GitHub credentials to CI unless a future workflow has a documented need, least-privilege permissions, and human review.
+**Before treating a pull request as merge-ready, the owner should:**
+
+1. Enable **Dependency graph** at [Settings → Code security → Dependency graph](https://github.com/Sudipsudip5250/airsi-algotrader/settings/security_analysis). Until that is on, the `Review dependency changes` check fails with “Dependency review is not supported on this repository.” That failure is not a workflow-file bug and must not be skipped with `continue-on-error`.
+2. Treat **Analyze (javascript-typescript)** and **Analyze (python)** as the CodeQL workflow jobs. The extra named **CodeQL** check is GitHub code scanning’s alert status (it is not a duplicate Actions job). Keep it required; fix alerts rather than deleting the workflow.
+3. Protect `main` by requiring `Python checks`, `TypeScript checks`, `Safety and workflow policy`, `Analyze (javascript-typescript)`, `Analyze (python)`, and (after step 1) `Review dependency changes`.
+
+For stronger future protection, the owner should review the repository’s Actions settings and choose a policy that permits only trusted GitHub Actions used here. The owner should also enable “Require actions to be pinned to a full-length commit SHA” if available, enable secret scanning/push protection where the plan permits. Do not add exchange, Telegram, AI-provider, or personal GitHub credentials to CI unless a future workflow has a documented need, least-privilege permissions, and human review.
 
 ## Education-only and GitHub policy boundary
 

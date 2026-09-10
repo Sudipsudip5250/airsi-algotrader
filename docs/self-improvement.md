@@ -12,9 +12,29 @@ python agents/researcher.py --use-ai
 
 The existing `bot/ai_client.py` chain is used: **Ollama (if running) → Groq free → Hugging Face free → OpenRouter `:free` → plain text**. Paid models are skipped unless `AI_ALLOW_PAID=1`. Responses are cached under `experiments/cache/ai/` for 24 hours. Duplicate pending ideas are skipped unless `--force` is passed. Logs and stderr print `provider=` and `cost_class=`.
 
-## First full loop
+## Research day (recommended)
 
-Run all commands from the repository root after installing the project dependencies:
+From the repository root, after installing project dependencies:
+
+```bash
+python scripts/research_day.py
+```
+
+That single command prints preflight (freqtrade / local OHLCV / paper template), creates one **no-AI** proposal from local artifacts, dry-evaluates it, writes `experiments/QUEUE.md`, and stops for a human decision. It never edits `AIRSIAlgoStrategy.py`, `bot/config.paper.json`, or `bot/config.live.json`.
+
+```bash
+# If OHLCV is missing and a limited backtest is wanted:
+python scripts/research_day.py --download --run-backtest --days 30
+
+# Optional advisory commentary (free-first chain; paid models still need AI_ALLOW_PAID=1):
+python scripts/research_day.py --use-ai
+```
+
+Missing freqtrade or OHLCV is fail-closed: `--run-backtest` records `verdict=not_run` instead of inventing metrics. Approval is **not** part of this script.
+
+## First full loop (manual steps)
+
+The research-day script is the same loop as the commands below. Use the manual steps when you want to inspect each artifact.
 
 ```bash
 # 1. Generate one proposal from local backtests and paper logs (no AI quota).

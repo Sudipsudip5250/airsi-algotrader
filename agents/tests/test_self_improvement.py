@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import zipfile
 from pathlib import Path
@@ -465,4 +466,63 @@ def test_reviewer_status_prints_local_counts(tmp_path: Path, monkeypatch: pytest
     assert "proposals=1" in output
     assert "pending=1" in output
     assert "none" in output
+
+
+def _load_research_day():
+    path = Path(__file__).resolve().parents[2] / "scripts" / "research_day.py"
+    spec = importlib.util.spec_from_file_location("research_day", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_research_day_preflight_and_kind_are_explicit(monkeypatch: pytest.MonkeyPatch) -> None:
+    research_day = _load_research_day()
+    monkeypatch.setattr(research_day.shutil, "which", lambda _: None)
+    monkeypatch.setattr(research_day, "has_local_ohlcv", lambda data_dir=None: False)
+    checks = research_day.collect_preflight()
+    assert "missing" in checks["freqtrade"]
+    assert "download_data.py" in checks["ohlcv"]
+    assert "will not be modified" in checks["paper_template"]
+    assert research_day.evaluation_kind("phase-a-dry-evaluator-1", "inconclusive") == "Dry evaluation"
+    assert research_day.evaluation_kind("phase-b-limited-backtest-1", "promising") == "Limited backtest"
+    assert research_day.evaluation_kind("phase-b-limited-backtest-1", "not_run") == "Limited backtest (not run)"
+
+
+def test_research_day_dry_path_does_not_touch_paper_or_live(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from agents import evaluator, reviewer, runtime
+    from agents.evaluator import PAPER_TEMPLATE, ROOT
+
+    research_day = _load_research_day()
+    proposals = tmp_path / "proposals"
+    evaluations = tmp_path / "evaluations"
+    decisions = tmp_path / "decisions"
+    for path in (proposals, evaluations, decisions):
+        path.mkdir()
+    monkeypatch.setattr(research_day, "PROPOSALS_DIR", proposals)
+    monkeypatch.setattr(research_day, "collect_context", lambda: {
+        "collected_at": "2026-01-01T00:00:00Z",
+        "backtests": [],
+        "paper_logs": [],
+        "evaluations": [],
+        "decisions": [],
+    })
+    monkeypatch.setattr(evaluator, "EVALUATIONS_DIR", evaluations)
+    monkeypatch.setattr(reviewer, "PROPOSALS_DIR", proposals)
+    monkeypatch.setattr(reviewer, "EVALUATIONS_DIR", evaluations)
+    monkeypatch.setattr(reviewer, "DECISIONS_DIR", decisions)
+    monkeypatch.setattr(reviewer, "QUEUE_MARKDOWN", tmp_path / "QUEUE.md")
+    monkeypatch.setattr(runtime, "ACTION_LOG", tmp_path / "actions.jsonl")
+    paper_before = PAPER_TEMPLATE.read_text(encoding="utf-8")
+    live = ROOT / "bot" / "config.live.json"
+    live_before = live.read_text(encoding="utf-8") if live.exists() else None
+    assert research_day.run_research_day(use_ai=False, force=True, run_backtest=False) == 0
+    assert list(proposals.glob("proposal-*.json"))
+    assert list(evaluations.glob("proposal-*.json"))
+    assert PAPER_TEMPLATE.read_text(encoding="utf-8") == paper_before
+    if live_before is not None:
+        assert live.read_text(encoding="utf-8") == live_before
 

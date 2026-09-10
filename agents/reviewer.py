@@ -188,7 +188,11 @@ def list_queue() -> int:
     print("PROPOSAL_ID\tSTATE\tEVALUATION\tTITLE")
     for row in rows:
         print("\t".join(row))
-    print(f"\nMarkdown queue: {QUEUE_MARKDOWN.relative_to(ROOT)}", file=sys.stderr)
+    try:
+        queue_display = QUEUE_MARKDOWN.relative_to(ROOT)
+    except ValueError:
+        queue_display = QUEUE_MARKDOWN
+    print(f"\nMarkdown queue: {queue_display}", file=sys.stderr)
     return 0
 
 

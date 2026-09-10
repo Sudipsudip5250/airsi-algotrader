@@ -1,9 +1,12 @@
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
 
 from market_intelligence import (
     IntelligenceDecision,
     MarketSnapshot,
+    _host_is,
     _llm_settings,
+    _looks_paid,
     deterministic_risk,
     read_decision,
     write_decision,
@@ -91,7 +94,16 @@ def test_llm_settings_prefer_groq_free(monkeypatch):
     monkeypatch.setenv("GROQ_MODEL", "llama-3.1-8b-instant")
     monkeypatch.setattr("market_intelligence._ollama_available", lambda _url: False)
     base, key, model, cost = _llm_settings()
-    assert "groq.com" in base
+    assert urlparse(base).hostname == "api.groq.com"
     assert key == "gsk-test"
     assert model == "llama-3.1-8b-instant"
     assert cost == "free"
+
+
+def test_looks_paid_matches_hostname_not_url_substring():
+    assert _looks_paid("https://api.openai.com/v1", "gpt-5-mini") is True
+    assert _looks_paid("https://api.groq.com/openai/v1", "llama-3.1-8b-instant") is False
+    assert _looks_paid("https://evil.example/openai.com", "llama") is False
+    assert _looks_paid("https://notopenai.com/v1", "llama") is False
+    assert _host_is("https://api.groq.com/openai/v1", "groq.com") is True
+    assert _host_is("https://attacker.example/?q=groq.com", "groq.com") is False

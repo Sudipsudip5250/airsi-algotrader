@@ -22,6 +22,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import requests
 
@@ -250,13 +251,35 @@ def _allow_paid() -> bool:
     return os.getenv("AI_ALLOW_PAID", "").strip().lower() in _TRUTHY
 
 
-def _looks_paid(base: str, model: str) -> bool:
-    haystack = f"{base} {model}".lower()
-    if ":free" in haystack:
+def _hostname(value: str) -> str:
+    text = (value or "").strip()
+    if not text:
+        return ""
+    if "://" not in text:
+        text = "https://" + text
+    host = urlparse(text).hostname
+    return (host or "").lower().rstrip(".")
+
+
+def _host_is(value: str, *domains: str) -> bool:
+    """True when the URL hostname is exactly a domain or a subdomain of it."""
+    host = _hostname(value)
+    if not host:
         return False
-    if "openai.com" in haystack:
+    for domain in domains:
+        needle = domain.lower().rstrip(".")
+        if host == needle or host.endswith("." + needle):
+            return True
+    return False
+
+
+def _looks_paid(base: str, model: str) -> bool:
+    model_l = (model or "").lower()
+    if ":free" in model_l:
+        return False
+    if _host_is(base, "openai.com"):
         return True
-    return any(marker in haystack for marker in _PAID_MODEL_MARKERS)
+    return any(marker in model_l for marker in _PAID_MODEL_MARKERS)
 
 
 def _ollama_available(base_url: str) -> bool:
@@ -287,7 +310,12 @@ def _llm_settings() -> tuple[str, str, str, str]:
                 model or "(unset)",
             )
         else:
-            cost = "paid" if _looks_paid(base, model) else ("free" if "groq.com" in base or ":free" in model.lower() else "low")
+            if _looks_paid(base, model):
+                cost = "paid"
+            elif _host_is(base, "groq.com") or ":free" in (model or "").lower():
+                cost = "free"
+            else:
+                cost = "low"
             return base.rstrip("/"), key, model or "llama-3.1-8b-instant", cost
 
     groq_key = os.getenv("GROQ_API_KEY", "").strip()
