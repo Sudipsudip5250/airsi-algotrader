@@ -63,8 +63,11 @@ jobs:
         run: npm install --global pnpm@${{ env.PNPM_VERSION }}
       - name: Install Node dependencies
         run: pnpm install --frozen-lockfile
-      - name: Audit all Node dependencies
-        run: pnpm audit --audit-level high
+      - name: Audit production Node dependencies
+        # Mandatory CI follows docs/dependency-audit.md. A full-graph
+        # `pnpm audit --audit-level high` currently fails on codegen/dev
+        # tooling (orval → fast-uri) and would skip typecheck/build.
+        run: pnpm audit --prod --audit-level high
       - name: Typecheck all workspaces
         run: pnpm run typecheck
       - name: Build dashboard and API

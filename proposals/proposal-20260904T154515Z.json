@@ -1,0 +1,47 @@
+{
+  "changes": {
+    "stake_amount": 25.0
+  },
+  "created_at": "2026-09-04T15:45:15Z",
+  "evaluation_plan": {
+    "compare_against": "latest local backtest metrics",
+    "metrics": [
+      "expectancy",
+      "max_drawdown",
+      "number_of_trades"
+    ],
+    "minimum_trades": 10,
+    "mode": "dry_evaluation",
+    "optional_backtest": true
+  },
+  "hypothesis": "A high drawdown snapshot should be re-tested with a smaller paper stake before any other parameter or strategy change is considered.",
+  "proposal_id": "proposal-20260904T154515Z",
+  "proposal_type": "parameter_change",
+  "rationale": "Research proposal only; no production strategy file or live configuration is modified. Advisory note (none/free): AI commentary was intentionally disabled for this run.",
+  "schema_version": 1,
+  "source_summary": {
+    "ai_cached": false,
+    "ai_cost_class": "free",
+    "ai_provider": "none",
+    "backtests": [
+      {
+        "file": "bot/user_data/backtest_results/demo.json",
+        "metrics": {
+          "expectancy": 0.04,
+          "max_drawdown": 0.12,
+          "number_of_trades": 18
+        }
+      }
+    ],
+    "baseline_metrics": {
+      "expectancy": 0.04,
+      "max_drawdown": 0.12,
+      "number_of_trades": 18.0
+    },
+    "fingerprint": "12f203e4eb6fe3a3",
+    "paper_logs": []
+  },
+  "status": "evaluated",
+  "target_config": "experiments/experimental-profiles/proposal-20260904T154515Z.json",
+  "title": "Halve paper stake_amount on an isolated experimental profile"
+}

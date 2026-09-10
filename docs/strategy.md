@@ -60,7 +60,7 @@ freqtrade hyperopt \
 
 ## Live market intelligence
 
-The optional worker in `bot/market_intelligence.py` collects public Bitcoin and total-market movement, BTC funding rate, BTC open interest, GDELT article metadata, and any RSS feeds configured in `NEWS_RSS_URLS`. It sends only structured market-risk classification to the configured OpenAI-compatible model. The default model is `gpt-5-mini`, selected from the live model catalog for low-cost structured classification; replace it only after reviewing latency, cost, and quality.
+The optional worker in `bot/market_intelligence.py` collects public Bitcoin and total-market movement, BTC funding rate, BTC open interest, GDELT article metadata, and any RSS feeds configured in `NEWS_RSS_URLS`. Classification is deterministic by default. If an LLM is configured, the worker prefers free/local providers (Groq, Ollama). Paid OpenAI models are not used unless `AI_ALLOW_PAID=1`.
 
 The model is not asked for a price target, buy/sell instruction, leverage, pair selection, or position size. Its output is combined with deterministic thresholds and can only veto new live/dry-run entries. It cannot close existing positions or authorize a trade. Missing, stale, malformed, or failed intelligence causes a fail-closed veto. Backtests and hyperopt ignore this external layer so historical results remain reproducible.
 

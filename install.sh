@@ -123,9 +123,11 @@ else
     warn "IMPORTANT: Open .env and fill in your API keys:"
     echo -e "     ${CYAN}TELEGRAM_BOT_TOKEN${NC}    ← from @BotFather on Telegram"
     echo -e "     ${CYAN}TELEGRAM_CHAT_ID${NC}      ← from getUpdates API call"
-    echo -e "     ${CYAN}GROQ_API_KEY${NC}          ← free at console.groq.com"
-    echo -e "     ${CYAN}OPENROUTER_API_KEY${NC}    ← free at openrouter.ai/keys"
-    echo -e "     ${CYAN}HUGGINGFACE_API_KEY${NC}   ← free at hf.co/settings/tokens"
+    echo -e "     ${CYAN}OLLAMA_BASE_URL${NC}       ← local, preferred when Ollama is running"
+    echo -e "     ${CYAN}GROQ_API_KEY${NC}          ← optional free tier at console.groq.com"
+    echo -e "     ${CYAN}OPENROUTER_API_KEY${NC}    ← optional; use a :free model"
+    echo -e "     ${CYAN}HUGGINGFACE_API_KEY${NC}   ← optional free tier at hf.co/settings/tokens"
+    echo -e "     ${CYAN}AI_ALLOW_PAID${NC}         ← keep 0 unless you explicitly want paid models"
 fi
 
 # ── Optional: Ollama ──────────────────────────────────────────────────────────
@@ -161,7 +163,7 @@ echo -e "${GREEN}║  ✔  Setup Complete!                                  ║$
 echo -e "${GREEN}╠══════════════════════════════════════════════════════╣${NC}"
 echo -e "${GREEN}║                                                      ║${NC}"
 echo -e "${GREEN}║  Next steps:                                         ║${NC}"
-echo -e "${GREEN}║  1. Edit .env with your Telegram/Groq keys           ║${NC}"
+echo -e "${GREEN}║  1. Optional: Ollama/Groq keys; keep AI_ALLOW_PAID=0 ║${NC}"
 echo -e "${GREEN}║  2. source scripts/activate.sh                       ║${NC}"
 echo -e "${GREEN}║     or source venv/bin/activate                       ║${NC}"
 echo -e "${GREEN}║  3. python scripts/download_data.py                  ║${NC}"

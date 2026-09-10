@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import importlib.util
 import json
+import zipfile
 from pathlib import Path
 
 import pytest
 
-from agents.context import _redact, extract_metrics
-from agents.evaluator import evaluate
-from agents.models import EvaluationResult, ExperimentProposal, HumanDecision, SchemaError, read_json, write_json
-from agents.researcher import build_proposal
+from agents.context import _redact, extract_metrics, fingerprint_idea
+from agents.evaluator import evaluate, evaluate_proposal, run_limited_backtest
+from agents.models import ExperimentProposal, HumanDecision, SchemaError, read_json, update_proposal_status, write_json
+from agents.researcher import build_proposal, find_duplicate, select_experiment
+from agents.reviewer import write_queue_markdown
 
 
 def test_models_round_trip_as_versioned_json(tmp_path: Path) -> None:
@@ -57,8 +60,37 @@ def test_researcher_builds_pending_proposal_without_ai() -> None:
         use_ai=False,
     )
     assert proposal.status == "pending"
-    assert proposal.proposal_type == "test_idea"
+    assert proposal.proposal_type == "documentation"
+    assert proposal.changes == {}
     assert proposal.target_config.startswith("experiments/experimental-profiles/")
+    assert proposal.source_summary["ai_provider"] == "none"
+    assert proposal.source_summary["ai_cost_class"] == "free"
+
+
+def test_researcher_proposes_conservative_stake_on_high_drawdown() -> None:
+    idea = select_experiment({"expectancy": 0.1, "max_drawdown": 0.15, "number_of_trades": 20})
+    assert idea["proposal_type"] == "parameter_change"
+    assert idea["changes"] == {"stake_amount": 25.0}
+
+
+def test_researcher_skips_duplicate_fingerprint(tmp_path: Path) -> None:
+    first = ExperimentProposal(
+        proposal_id="proposal-test-dup-1",
+        created_at="2026-01-01T00:00:00Z",
+        title="Collect a local backtest or paper-log sample before changing parameters",
+        hypothesis="Without a metric snapshot, any parameter change would be unfalsifiable.",
+        proposal_type="documentation",
+        target_config="experiments/experimental-profiles/proposal-test-dup-1.json",
+        source_summary={"fingerprint": fingerprint_idea(
+            "documentation",
+            "Collect a local backtest or paper-log sample before changing parameters",
+            {},
+        )},
+    )
+    write_json(tmp_path / f"{first.proposal_id}.json", first)
+    found = find_duplicate(str(first.source_summary["fingerprint"]), tmp_path)
+    assert found is not None
+    assert found.proposal_id == first.proposal_id
 
 
 def test_evaluator_fails_closed_on_insufficient_trades() -> None:
@@ -74,6 +106,26 @@ def test_evaluator_fails_closed_on_insufficient_trades() -> None:
     result = evaluate(proposal, {"expectancy": 1.0, "max_drawdown": 0.2, "number_of_trades": 3.0}, "test", 10)
     assert result.verdict == "inconclusive"
     assert result.candidate == result.baseline
+
+
+def test_dry_parameter_change_does_not_claim_improvement() -> None:
+    proposal = ExperimentProposal(
+        proposal_id="proposal-test-006",
+        created_at="2026-01-01T00:00:00Z",
+        title="Halve stake",
+        hypothesis="Smaller stake should be tested in isolation.",
+        proposal_type="parameter_change",
+        target_config="experiments/experimental-profiles/proposal-test-006.json",
+        changes={"stake_amount": 25.0},
+    )
+    result = evaluate(
+        proposal,
+        {"expectancy": 0.1, "max_drawdown": 0.05, "number_of_trades": 20.0},
+        "test",
+        10,
+    )
+    assert result.verdict == "inconclusive"
+    assert "unevaluated" in result.notes
 
 
 def test_request_more_data_is_explicit_and_never_applies_profile() -> None:
@@ -101,3 +153,376 @@ def test_human_decision_requires_experimental_directory_for_apply() -> None:
             apply_to_experimental=True,
             applied_path="bot/config.live.json",
         )
+
+
+def test_apply_experimental_rejected_unless_approve() -> None:
+    with pytest.raises(SchemaError):
+        HumanDecision(
+            proposal_id="proposal-test-007",
+            decided_at="2026-01-01T00:00:00Z",
+            reviewer="Reviewer",
+            decision="reject",
+            rationale="Must not apply.",
+            apply_to_experimental=True,
+        )
+
+
+def test_update_proposal_status_rewrites_only_status(tmp_path: Path) -> None:
+    proposal = ExperimentProposal(
+        proposal_id="proposal-test-008",
+        created_at="2026-01-01T00:00:00Z",
+        title="Status update",
+        hypothesis="Status should move to evaluated.",
+        proposal_type="test_idea",
+        target_config="experiments/experimental-profiles/proposal-test-008.json",
+    )
+    path = tmp_path / "proposal.json"
+    write_json(path, proposal)
+    updated = update_proposal_status(path, "evaluated")
+    assert updated.status == "evaluated"
+    assert updated.title == proposal.title
+
+
+def test_queue_markdown_is_written(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from agents import reviewer
+
+    monkeypatch.setattr(reviewer, "QUEUE_MARKDOWN", tmp_path / "QUEUE.md")
+    monkeypatch.setattr(reviewer, "PROPOSALS_DIR", tmp_path / "proposals")
+    (tmp_path / "proposals").mkdir()
+    path = reviewer.write_queue_markdown([])
+    text = path.read_text(encoding="utf-8")
+    assert "review queue" in text.lower()
+    assert "not a trading signal" in text
+
+
+def test_experimental_profile_is_stopped_dry_run_and_clamped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from agents import reviewer
+
+    paper = {
+        "dry_run": True,
+        "initial_state": "running",
+        "force_entry_enable": True,
+        "max_open_trades": 2,
+        "stake_amount": 50,
+        "dry_run_wallet": 1000,
+        "bot_name": "AIRSIAlgoTrader",
+        "internals": {"process_throttle_secs": 5},
+    }
+    template = tmp_path / "config.paper.json"
+    template.write_text(json.dumps(paper), encoding="utf-8")
+    monkeypatch.setattr(reviewer, "PAPER_TEMPLATE", template)
+    monkeypatch.setattr(reviewer, "EXPERIMENTAL_PROFILES_DIR", tmp_path / "profiles")
+    proposal = ExperimentProposal(
+        proposal_id="proposal-test-profile",
+        created_at="2026-01-01T00:00:00Z",
+        title="Halve stake",
+        hypothesis="Smaller stake.",
+        proposal_type="parameter_change",
+        target_config="experiments/experimental-profiles/proposal-test-profile.json",
+        changes={"stake_amount": 999.0, "max_open_trades": 99.0},
+    )
+    path = reviewer._experimental_profile(proposal)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["dry_run"] is True
+    assert payload["initial_state"] == "stopped"
+    assert payload["force_entry_enable"] is False
+    assert payload["stake_amount"] == 100.0
+    assert payload["max_open_trades"] == 10
+
+
+def test_limited_backtest_without_freqtrade_is_fail_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    from agents import evaluator
+
+    monkeypatch.setattr(evaluator.shutil, "which", lambda _: None)
+    proposal = ExperimentProposal(
+        proposal_id="proposal-test-backtest",
+        created_at="2026-01-01T00:00:00Z",
+        title="Halve stake",
+        hypothesis="Smaller stake.",
+        proposal_type="parameter_change",
+        target_config="experiments/experimental-profiles/proposal-test-backtest.json",
+        changes={"stake_amount": 25.0},
+    )
+    metrics, reason = run_limited_backtest(proposal, 30)
+    assert metrics is None
+    assert "not installed" in reason
+    result = evaluate_proposal(proposal, run_backtest=True, days=30)
+    assert result.verdict == "not_run"
+    assert "production files were not modified" in result.notes
+
+
+def test_decide_rejects_missing_evaluation_and_terminal_overwrite(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from agents import reviewer, runtime
+
+    proposals = tmp_path / "proposals"
+    evaluations = tmp_path / "evaluations"
+    decisions = tmp_path / "decisions"
+    profiles = tmp_path / "profiles"
+    for path in (proposals, evaluations, decisions, profiles):
+        path.mkdir()
+    monkeypatch.setattr(reviewer, "PROPOSALS_DIR", proposals)
+    monkeypatch.setattr(reviewer, "EVALUATIONS_DIR", evaluations)
+    monkeypatch.setattr(reviewer, "DECISIONS_DIR", decisions)
+    monkeypatch.setattr(reviewer, "EXPERIMENTAL_PROFILES_DIR", profiles)
+    monkeypatch.setattr(reviewer, "QUEUE_MARKDOWN", tmp_path / "QUEUE.md")
+    monkeypatch.setattr(runtime, "ACTION_LOG", tmp_path / "actions.jsonl")
+    monkeypatch.setattr(reviewer, "PAPER_TEMPLATE", tmp_path / "config.paper.json")
+    (tmp_path / "config.paper.json").write_text(
+        json.dumps({"dry_run": True, "initial_state": "running", "force_entry_enable": True, "stake_amount": 50}),
+        encoding="utf-8",
+    )
+
+    proposal = ExperimentProposal(
+        proposal_id="proposal-test-decide",
+        created_at="2026-01-01T00:00:00Z",
+        title="Collect more evidence",
+        hypothesis="Need an evaluation first.",
+        proposal_type="test_idea",
+        target_config="experiments/experimental-profiles/proposal-test-decide.json",
+    )
+    write_json(proposals / f"{proposal.proposal_id}.json", proposal)
+    with pytest.raises(ValueError, match="evaluate the proposal"):
+        reviewer.decide(f"{proposal.proposal_id}.json", "reject", "Reviewer", "No eval yet", False)
+
+    evaluation = evaluate(
+        proposal,
+        {"expectancy": 0.0, "max_drawdown": 0.0, "number_of_trades": 0.0},
+        "test",
+        10,
+    )
+    write_json(evaluations / f"{proposal.proposal_id}.json", evaluation)
+    assert reviewer.decide(f"{proposal.proposal_id}.json", "request-more-data", "Reviewer", "Need a longer window.", False) == 0
+    assert reviewer.decide(f"{proposal.proposal_id}.json", "reject", "Reviewer", "Still insufficient evidence.", False) == 0
+    with pytest.raises(ValueError, match="terminal human decision"):
+        reviewer.decide(f"{proposal.proposal_id}.json", "approve", "Reviewer", "Should not overwrite.", False)
+
+
+def test_extract_metrics_prefers_relative_drawdown_and_comparison_list() -> None:
+    assert extract_metrics(
+        {
+            "strategy": {
+                "AIRSIAlgoStrategy": {
+                    "total_trades": 10,
+                    "profit_total": 2.0,
+                    "max_relative_drawdown": 0.08,
+                    "max_drawdown": 80.0,
+                }
+            }
+        }
+    ) == {"expectancy": 0.2, "max_drawdown": 0.08, "number_of_trades": 10.0}
+    assert extract_metrics(
+        {
+            "strategy_comparison": [
+                {"key": "AIRSIAlgoStrategy", "trades": 10, "profit_total": 2.0, "max_drawdown_account": 0.04}
+            ]
+        }
+    ) == {"expectancy": 0.2, "max_drawdown": 0.04, "number_of_trades": 10.0}
+    assert extract_metrics({"strategy": {"AIRSIAlgoStrategy": {"profit_total": 1}}}) is None
+
+
+def test_metrics_from_zip_export(tmp_path: Path) -> None:
+    from agents.evaluator import _metrics_from_backtest
+
+    payload = {
+        "strategy": {
+            "AIRSIAlgoStrategy": {"total_trades": 8, "profit_total": 4.0, "max_drawdown": 0.2},
+        }
+    }
+    zip_path = tmp_path / "backtest-result.zip"
+    with zipfile.ZipFile(zip_path, "w") as archive:
+        archive.writestr("backtest-result_config.json", json.dumps({"dry_run": True}))
+        archive.writestr("backtest-result.json", json.dumps(payload))
+    assert _metrics_from_backtest(zip_path) == {
+        "expectancy": 0.5,
+        "max_drawdown": 0.2,
+        "number_of_trades": 8.0,
+    }
+
+
+def test_limited_backtest_without_data_is_fail_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    from agents import evaluator
+
+    monkeypatch.setattr(evaluator.shutil, "which", lambda _: "/usr/bin/freqtrade")
+    monkeypatch.setattr(evaluator, "has_local_ohlcv", lambda data_dir=None: False)
+    proposal = ExperimentProposal(
+        proposal_id="proposal-test-nodata",
+        created_at="2026-01-01T00:00:00Z",
+        title="Halve stake",
+        hypothesis="Smaller stake.",
+        proposal_type="parameter_change",
+        target_config="experiments/experimental-profiles/proposal-test-nodata.json",
+        changes={"stake_amount": 25.0},
+    )
+    metrics, reason = run_limited_backtest(proposal, 30)
+    assert metrics is None
+    assert "no local market data" in reason
+    result = evaluate_proposal(proposal, run_backtest=True, days=30)
+    assert result.verdict == "not_run"
+    assert result.evaluator_version == "phase-b-limited-backtest-1"
+    assert "production files were not modified" in result.notes
+
+
+def test_preflight_refuses_protected_configs() -> None:
+    from agents.evaluator import assert_experimental_target
+
+    with pytest.raises(ValueError, match="protected"):
+        assert_experimental_target("bot/config.paper.json")
+    with pytest.raises(ValueError, match="protected"):
+        assert_experimental_target("bot/config.live.json")
+
+
+def test_temporary_config_leaves_paper_and_live_untouched(tmp_path: Path) -> None:
+    from agents.evaluator import PAPER_TEMPLATE, ROOT, _temporary_experimental_config
+
+    paper_before = PAPER_TEMPLATE.read_text(encoding="utf-8")
+    live = ROOT / "bot" / "config.live.json"
+    live_before = live.read_text(encoding="utf-8") if live.exists() else None
+    proposal = ExperimentProposal(
+        proposal_id="proposal-test-tempconfig",
+        created_at="2026-01-01T00:00:00Z",
+        title="Halve stake",
+        hypothesis="Smaller stake.",
+        proposal_type="parameter_change",
+        target_config="experiments/experimental-profiles/proposal-test-tempconfig.json",
+        changes={"stake_amount": 25.0},
+    )
+    path = _temporary_experimental_config(proposal, tmp_path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert path.parent == tmp_path
+    assert payload["dry_run"] is True
+    assert payload["initial_state"] == "stopped"
+    assert payload["force_entry_enable"] is False
+    assert payload["stake_amount"] == 25.0
+    assert PAPER_TEMPLATE.read_text(encoding="utf-8") == paper_before
+    if live_before is not None:
+        assert live.read_text(encoding="utf-8") == live_before
+
+
+def test_collect_context_includes_local_evaluations_and_decisions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from agents import context
+
+    evaluations = tmp_path / "evaluations"
+    decisions = tmp_path / "decisions"
+    evaluations.mkdir()
+    decisions.mkdir()
+    (evaluations / "proposal-local-eval.json").write_text(
+        json.dumps(
+            {
+                "proposal_id": "proposal-local-eval",
+                "verdict": "inconclusive",
+                "evaluator_version": "phase-a-dry-evaluator-1",
+                "notes": "dry only",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (decisions / "proposal-local-eval.json").write_text(
+        json.dumps(
+            {
+                "proposal_id": "proposal-local-eval",
+                "decision": "reject",
+                "reviewer": "Reviewer",
+                "rationale": "Need a longer window.",
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(context, "EVALUATIONS_DIR", evaluations)
+    monkeypatch.setattr(context, "DECISIONS_DIR", decisions)
+    monkeypatch.setattr(context, "BACKTEST_DIR", tmp_path / "missing-backtests")
+    monkeypatch.setattr(context, "LOG_DIR", tmp_path / "missing-logs")
+    collected = context.collect_context()
+    assert collected["evaluations"][0]["verdict"] == "inconclusive"
+    assert collected["decisions"][0]["decision"] == "reject"
+    proposal = build_proposal(collected, use_ai=False)
+    assert proposal.source_summary["recent_evaluations"][0]["proposal_id"] == "proposal-local-eval"
+
+
+def test_reviewer_status_prints_local_counts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    from agents import reviewer
+
+    proposals = tmp_path / "proposals"
+    proposals.mkdir()
+    monkeypatch.setattr(reviewer, "PROPOSALS_DIR", proposals)
+    monkeypatch.setattr(reviewer, "EVALUATIONS_DIR", tmp_path / "evaluations")
+    monkeypatch.setattr(reviewer, "DECISIONS_DIR", tmp_path / "decisions")
+    (tmp_path / "evaluations").mkdir()
+    (tmp_path / "decisions").mkdir()
+    proposal = ExperimentProposal(
+        proposal_id="proposal-test-status",
+        created_at="2026-01-01T00:00:00Z",
+        title="Status check",
+        hypothesis="Queue counts should stay local.",
+        proposal_type="test_idea",
+        target_config="experiments/experimental-profiles/proposal-test-status.json",
+    )
+    write_json(proposals / f"{proposal.proposal_id}.json", proposal)
+    assert reviewer.print_status() == 0
+    output = capsys.readouterr().out
+    assert "proposals=1" in output
+    assert "pending=1" in output
+    assert "none" in output
+
+
+def _load_research_day():
+    path = Path(__file__).resolve().parents[2] / "scripts" / "research_day.py"
+    spec = importlib.util.spec_from_file_location("research_day", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_research_day_preflight_and_kind_are_explicit(monkeypatch: pytest.MonkeyPatch) -> None:
+    research_day = _load_research_day()
+    monkeypatch.setattr(research_day.shutil, "which", lambda _: None)
+    monkeypatch.setattr(research_day, "has_local_ohlcv", lambda data_dir=None: False)
+    checks = research_day.collect_preflight()
+    assert "missing" in checks["freqtrade"]
+    assert "download_data.py" in checks["ohlcv"]
+    assert "will not be modified" in checks["paper_template"]
+    assert research_day.evaluation_kind("phase-a-dry-evaluator-1", "inconclusive") == "Dry evaluation"
+    assert research_day.evaluation_kind("phase-b-limited-backtest-1", "promising") == "Limited backtest"
+    assert research_day.evaluation_kind("phase-b-limited-backtest-1", "not_run") == "Limited backtest (not run)"
+
+
+def test_research_day_dry_path_does_not_touch_paper_or_live(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from agents import evaluator, reviewer, runtime
+    from agents.evaluator import PAPER_TEMPLATE, ROOT
+
+    research_day = _load_research_day()
+    proposals = tmp_path / "proposals"
+    evaluations = tmp_path / "evaluations"
+    decisions = tmp_path / "decisions"
+    for path in (proposals, evaluations, decisions):
+        path.mkdir()
+    monkeypatch.setattr(research_day, "PROPOSALS_DIR", proposals)
+    monkeypatch.setattr(research_day, "collect_context", lambda: {
+        "collected_at": "2026-01-01T00:00:00Z",
+        "backtests": [],
+        "paper_logs": [],
+        "evaluations": [],
+        "decisions": [],
+    })
+    monkeypatch.setattr(evaluator, "EVALUATIONS_DIR", evaluations)
+    monkeypatch.setattr(reviewer, "PROPOSALS_DIR", proposals)
+    monkeypatch.setattr(reviewer, "EVALUATIONS_DIR", evaluations)
+    monkeypatch.setattr(reviewer, "DECISIONS_DIR", decisions)
+    monkeypatch.setattr(reviewer, "QUEUE_MARKDOWN", tmp_path / "QUEUE.md")
+    monkeypatch.setattr(runtime, "ACTION_LOG", tmp_path / "actions.jsonl")
+    paper_before = PAPER_TEMPLATE.read_text(encoding="utf-8")
+    live = ROOT / "bot" / "config.live.json"
+    live_before = live.read_text(encoding="utf-8") if live.exists() else None
+    assert research_day.run_research_day(use_ai=False, force=True, run_backtest=False) == 0
+    assert list(proposals.glob("proposal-*.json"))
+    assert list(evaluations.glob("proposal-*.json"))
+    assert PAPER_TEMPLATE.read_text(encoding="utf-8") == paper_before
+    if live_before is not None:
+        assert live.read_text(encoding="utf-8") == live_before
+

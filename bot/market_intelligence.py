@@ -22,6 +22,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import requests
 
@@ -33,11 +34,13 @@ COINGECKO_GLOBAL_URL = "https://api.coingecko.com/api/v3/global"
 BINANCE_FUNDING_URL = "https://fapi.binance.com/fapi/v1/premiumIndex"
 BINANCE_OI_URL = "https://fapi.binance.com/fapi/v1/openInterest"
 DEFAULT_DECISION_PATH = "bot/user_data/market_intelligence.json"
-DEFAULT_MODEL = "gpt-5-mini"
+DEFAULT_MODEL = ""
 DEFAULT_RSS_URLS = [
     "https://www.coindesk.com/arc/outboundfeeds/rss/",
     "https://cointelegraph.com/rss",
 ]
+_TRUTHY = {"1", "true", "yes", "on"}
+_PAID_MODEL_MARKERS = ("gpt-4", "gpt-5", "o1", "o3", "claude", "opus", "sonnet")
 
 
 @dataclass(frozen=True)
@@ -244,11 +247,90 @@ def deterministic_risk(snapshot: MarketSnapshot) -> tuple[str, bool, str]:
     return "normal", True, "No deterministic risk-off threshold was triggered"
 
 
-def _llm_settings() -> tuple[str, str, str]:
-    base = os.getenv("LLM_API_BASE", "https://api.openai.com/v1")
-    key = os.getenv("LLM_API_KEY", "")
-    model = os.getenv("LLM_MODEL", DEFAULT_MODEL)
-    return base.rstrip("/"), key, model
+def _allow_paid() -> bool:
+    return os.getenv("AI_ALLOW_PAID", "").strip().lower() in _TRUTHY
+
+
+def _hostname(value: str) -> str:
+    text = (value or "").strip()
+    if not text:
+        return ""
+    if "://" not in text:
+        text = "https://" + text
+    host = urlparse(text).hostname
+    return (host or "").lower().rstrip(".")
+
+
+def _host_is(value: str, *domains: str) -> bool:
+    """True when the URL hostname is exactly a domain or a subdomain of it."""
+    host = _hostname(value)
+    if not host:
+        return False
+    for domain in domains:
+        needle = domain.lower().rstrip(".")
+        if host == needle or host.endswith("." + needle):
+            return True
+    return False
+
+
+def _looks_paid(base: str, model: str) -> bool:
+    model_l = (model or "").lower()
+    if ":free" in model_l:
+        return False
+    if _host_is(base, "openai.com"):
+        return True
+    return any(marker in model_l for marker in _PAID_MODEL_MARKERS)
+
+
+def _ollama_available(base_url: str) -> bool:
+    try:
+        response = requests.get(f"{base_url.rstrip('/')}/api/tags", timeout=1.5)
+        return bool(response.ok)
+    except Exception:
+        return False
+
+
+def _llm_settings() -> tuple[str, str, str, str]:
+    """Return base, key, model, cost_class. Empty key means deterministic-only.
+
+    Paid OpenAI defaults are not used. Free Groq or local Ollama are preferred
+    when configured; otherwise the deterministic gate runs alone.
+    """
+    paid_ok = _allow_paid()
+    base = os.getenv("LLM_API_BASE", "").strip()
+    key = os.getenv("LLM_API_KEY", "").strip()
+    model = os.getenv("LLM_MODEL", DEFAULT_MODEL).strip()
+
+    if key and base:
+        if _looks_paid(base, model) and not paid_ok:
+            logger.info(
+                "Skipping paid intelligence LLM base=%s model=%s cost_class=paid "
+                "(set AI_ALLOW_PAID=1 to enable); using deterministic risk",
+                base,
+                model or "(unset)",
+            )
+        else:
+            if _looks_paid(base, model):
+                cost = "paid"
+            elif _host_is(base, "groq.com") or ":free" in (model or "").lower():
+                cost = "free"
+            else:
+                cost = "low"
+            return base.rstrip("/"), key, model or "llama-3.1-8b-instant", cost
+
+    groq_key = os.getenv("GROQ_API_KEY", "").strip()
+    if groq_key:
+        groq_model = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+        logger.info("Intelligence LLM provider=Groq cost_class=free model=%s", groq_model)
+        return "https://api.groq.com/openai/v1", groq_key, groq_model, "free"
+
+    ollama_base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+    ollama_model = os.getenv("OLLAMA_MODEL", "mistral")
+    if _ollama_available(ollama_base):
+        logger.info("Intelligence LLM provider=Ollama cost_class=free model=%s", ollama_model)
+        return f"{ollama_base}/v1", "ollama", ollama_model, "free"
+
+    return "", "", "", "free"
 
 
 def classify_news(snapshot: MarketSnapshot) -> tuple[str, bool, float, str, str]:
@@ -258,7 +340,7 @@ def classify_news(snapshot: MarketSnapshot) -> tuple[str, bool, float, str, str]
     or position size. If credentials are absent, deterministic risk remains the
     only decision source.
     """
-    base, key, model = _llm_settings()
+    base, key, model, cost_class = _llm_settings()
     deterministic_level, deterministic_allow, deterministic_reason = deterministic_risk(snapshot)
     if deterministic_level in {"high", "elevated"}:
         return deterministic_level, False, 1.0, deterministic_reason, "deterministic"
@@ -310,6 +392,7 @@ def classify_news(snapshot: MarketSnapshot) -> tuple[str, bool, float, str, str]
         reason = str(result["reason"])[:500]
         if deterministic_reason and deterministic_level != "normal":
             reason = f"{deterministic_reason}; {reason}"
+        logger.info("Intelligence LLM provider=%s cost_class=%s model=%s", base, cost_class, model)
         return risk, allow, confidence, reason, model
     except Exception as exc:
         risk, allow, reason = deterministic_risk(snapshot)

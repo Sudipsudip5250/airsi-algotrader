@@ -1,0 +1,10 @@
+{
+  "applied_path": null,
+  "apply_to_experimental": false,
+  "decided_at": "2026-09-04T15:45:00Z",
+  "decision": "reject",
+  "proposal_id": "proposal-20260904T154451Z",
+  "rationale": "Insufficient local evidence; collect a backtest first.",
+  "reviewer": "Operator",
+  "schema_version": 1
+}

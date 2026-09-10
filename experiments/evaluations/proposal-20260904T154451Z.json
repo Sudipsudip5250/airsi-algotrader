@@ -1,0 +1,23 @@
+{
+  "baseline": {
+    "expectancy": 0.0,
+    "max_drawdown": 0.0,
+    "number_of_trades": 0.0
+  },
+  "candidate": {
+    "expectancy": 0.0,
+    "max_drawdown": 0.0,
+    "number_of_trades": 0.0
+  },
+  "delta": {
+    "expectancy": 0.0,
+    "max_drawdown": 0.0,
+    "number_of_trades": 0.0
+  },
+  "evaluated_at": "2026-09-04T15:44:51Z",
+  "evaluator_version": "phase-a-dry-evaluator-1",
+  "notes": "Dry evaluation from proposal source summary; at least 10 trades are required for a meaningful comparison.",
+  "proposal_id": "proposal-20260904T154451Z",
+  "schema_version": 1,
+  "verdict": "inconclusive"
+}

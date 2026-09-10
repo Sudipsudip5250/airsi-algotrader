@@ -35,7 +35,7 @@ AIRSI AlgoTrader owns execution, strategy signals, Freqtrade protections, exchan
 | Freqtrade | Market data, orders, trade lifecycle, protections, persistence | Yes, within configured safeguards |
 | `AIRSIAlgoStrategy` | Deterministic indicators and entry/exit signals | Signals only |
 | Market intelligence worker | Public market/news collection and structured risk classification | No; writes only a short-lived veto snapshot |
-| `ai_client.py` | Optional commentary through provider fallback; never a trade gate | No |
+| `ai_client.py` | Optional commentary through free-first provider fallback; never a trade gate | No |
 | Telegram notifier | Operator alerts and summaries | No |
 | Express API | Authenticated proxy to Freqtrade telemetry | No direct exchange access |
 | React dashboard | Status, positions, trades, performance, logs | No direct exchange access |

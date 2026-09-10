@@ -230,7 +230,7 @@ paths:
         "404":
           description: Experiment not found
         "409":
-          description: Proposal has not been evaluated
+          description: Proposal has not been evaluated, or already has a terminal human decision
 components:
   schemas:
     HealthStatus:

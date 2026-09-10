@@ -33,6 +33,11 @@ services:
       - EXCHANGE_API_KEY=${EXCHANGE_API_KEY:-}
       - EXCHANGE_API_SECRET=${EXCHANGE_API_SECRET:-}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - HUGGINGFACE_API_KEY=${HUGGINGFACE_API_KEY:-}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-mistral}
+      - AI_ALLOW_PAID=${AI_ALLOW_PAID:-0}
     entrypoint: ["/bin/bash", "/freqtrade/project_scripts/freqtrade-entrypoint.sh"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/ping"]
@@ -49,9 +54,14 @@ services:
       - ./bot:/freqtrade/user_data
       - ./bot/market_intelligence.py:/freqtrade/project_scripts/market_intelligence.py:ro
     environment:
-      - LLM_API_BASE=${LLM_API_BASE:-https://api.openai.com/v1}
+      - LLM_API_BASE=${LLM_API_BASE:-}
       - LLM_API_KEY=${LLM_API_KEY:-}
-      - LLM_MODEL=${LLM_MODEL:-gpt-5-mini}
+      - LLM_MODEL=${LLM_MODEL:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GROQ_MODEL=${GROQ_MODEL:-llama-3.1-8b-instant}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-mistral}
+      - AI_ALLOW_PAID=${AI_ALLOW_PAID:-0}
       - NEWS_RSS_URLS=${NEWS_RSS_URLS:-}
       - INTELLIGENCE_POLL_SECONDS=${INTELLIGENCE_POLL_SECONDS:-900}
       - INTELLIGENCE_TTL_SECONDS=${INTELLIGENCE_TTL_SECONDS:-1800}

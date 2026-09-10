@@ -1,10 +1,12 @@
-from __future__ import annotations
-
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
 
 from market_intelligence import (
     IntelligenceDecision,
     MarketSnapshot,
+    _host_is,
+    _llm_settings,
+    _looks_paid,
     deterministic_risk,
     read_decision,
     write_decision,
@@ -69,3 +71,39 @@ def test_naive_decision_timestamps_fail_closed(tmp_path):
         '"snapshot_hash":"abc123","errors":[]}'
     )
     assert read_decision(path) is None
+
+
+def test_llm_settings_skip_paid_openai_by_default(monkeypatch):
+    monkeypatch.delenv("AI_ALLOW_PAID", raising=False)
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.setenv("LLM_API_BASE", "https://api.openai.com/v1")
+    monkeypatch.setenv("LLM_API_KEY", "sk-test")
+    monkeypatch.setenv("LLM_MODEL", "gpt-5-mini")
+    monkeypatch.setattr("market_intelligence._ollama_available", lambda _url: False)
+    base, key, model, cost = _llm_settings()
+    assert key == ""
+    assert model == ""
+    assert cost == "free"
+
+
+def test_llm_settings_prefer_groq_free(monkeypatch):
+    monkeypatch.delenv("AI_ALLOW_PAID", raising=False)
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    monkeypatch.delenv("LLM_API_BASE", raising=False)
+    monkeypatch.setenv("GROQ_API_KEY", "gsk-test")
+    monkeypatch.setenv("GROQ_MODEL", "llama-3.1-8b-instant")
+    monkeypatch.setattr("market_intelligence._ollama_available", lambda _url: False)
+    base, key, model, cost = _llm_settings()
+    assert urlparse(base).hostname == "api.groq.com"
+    assert key == "gsk-test"
+    assert model == "llama-3.1-8b-instant"
+    assert cost == "free"
+
+
+def test_looks_paid_matches_hostname_not_url_substring():
+    assert _looks_paid("https://api.openai.com/v1", "gpt-5-mini") is True
+    assert _looks_paid("https://api.groq.com/openai/v1", "llama-3.1-8b-instant") is False
+    assert _looks_paid("https://evil.example/openai.com", "llama") is False
+    assert _looks_paid("https://notopenai.com/v1", "llama") is False
+    assert _host_is("https://api.groq.com/openai/v1", "groq.com") is True
+    assert _host_is("https://attacker.example/?q=groq.com", "groq.com") is False

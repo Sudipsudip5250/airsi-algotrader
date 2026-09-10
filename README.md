@@ -57,7 +57,7 @@ The default paper profiles use `dry_run: true`, a virtual wallet, and environmen
 
 ## Self-improvement research loop
 
-The first self-improvement loop is intentionally offline and file-based. The researcher creates a versioned proposal from local evidence, the evaluator compares a dry candidate against expectancy/drawdown/trade-count baselines, and a human records approval or rejection. Approval can create only a stopped dry-run profile under `experiments/experimental-profiles/`; it never changes the production strategy or live configuration. See [docs/self-improvement.md](docs/self-improvement.md).
+The first self-improvement loop is intentionally offline and file-based. `python scripts/research_day.py` runs propose → dry-evaluate → status and then stops for a human decision. Approval can create only a stopped dry-run profile under `experiments/experimental-profiles/`; it never changes the production strategy or live configuration. See [docs/self-improvement.md](docs/self-improvement.md).
 
 ## Configuration profiles
 
@@ -72,7 +72,7 @@ All profiles use `AIRSIAlgoStrategy`. Exchange keys are environment-injected; wi
 
 ## AI commentary
 
-The optional fallback chain is **Groq → OpenRouter → Hugging Face → Ollama → plain text**. Provider failures do not stop the bot, and the strategy does not depend on a model response. AI output is commentary for operators, not a trading signal.
+The optional fallback chain is **Ollama (if running) → Groq free → Hugging Face free → OpenRouter `:free` models → plain text**. Paid models are skipped unless `AI_ALLOW_PAID=1`. Provider failures do not stop the bot, and the strategy does not depend on a model response. AI output is commentary for operators, not a trading signal. Logs include `provider=` and `cost_class=` (`free` / `low` / `paid`) so spend can be controlled.
 
 ## Safety controls
 
