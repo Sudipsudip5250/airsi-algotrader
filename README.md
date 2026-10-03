@@ -72,7 +72,7 @@ All profiles use `AIRSIAlgoStrategy`. Exchange keys are environment-injected; wi
 
 ## AI commentary
 
-The optional fallback chain is **Ollama (if running) → Groq free → Hugging Face free → OpenRouter `:free` models → plain text**. Paid models are skipped unless `AI_ALLOW_PAID=1`. Provider failures do not stop the bot, and the strategy does not depend on a model response. AI output is commentary for operators, not a trading signal. Logs include `provider=` and `cost_class=` (`free` / `low` / `paid`) so spend can be controlled.
+The optional fallback chain is **Groq free → Gemini Flash free → Hugging Face free → OpenRouter `openrouter/free` → Pollinations keyless → plain text**. No local daemon required. Paid models are skipped unless `AI_ALLOW_PAID=1`. Provider failures do not stop the bot, and the strategy does not depend on a model response. AI output is commentary for operators, not a trading signal. Logs include `provider=` and `cost_class=` (`free` / `low` / `paid`) so spend can be controlled.
 
 ## Safety controls
 
@@ -86,9 +86,9 @@ The React dashboard is served through the Node.js/Express API proxy. The standar
 | ------------------- | ------------------------ |
 | Freqtrade API/UI    | `http://localhost:8080`  |
 | AIRSI dashboard API | `http://localhost:5000`  |
-| Optional Ollama     | `http://localhost:11434` |
+| Pollinations keyless | `https://text.pollinations.ai` (free-trial fallback) |
 
-Docker Compose starts the paper-trading stack after the required Freqtrade API credentials are supplied in `.env`. The optional Ollama service is enabled with the `local-ai` profile. The live compose path still requires an explicit `FREQTRADE_CONFIG_TEMPLATE` and the live profile starts stopped.
+Docker Compose starts the paper-trading stack after the required Freqtrade API credentials are supplied in `.env`. No optional local-AI service; all providers are API-only. The live compose path still requires an explicit `FREQTRADE_CONFIG_TEMPLATE` and the live profile starts stopped.
 
 ## Repository layout
 
@@ -125,7 +125,7 @@ airsi-algotrader/
 | Testing stages                          | `docs/testing.md`              |
 | Dashboard                               | `docs/dashboard.md`            |
 | API keys                                | `docs/api-keys.md`             |
-| Local AI                                | `docs/local-ai-setup.md`       |
+| Exchange + wallet                     | `EXCHANGE`, `WALLET_MODE` in `.env` |
 | Unified architecture                    | `docs/unified-architecture.md` |
 | Performance research and loss diagnosis | `docs/performance-research.md` |
 | Education-only notice                   | `docs/education-only.md`       |

@@ -66,29 +66,69 @@ def main() -> None:
     print("   " + " ".join(cmd) + "\n")
     result = subprocess.run(cmd, check=False, cwd=ROOT)
 
-    if results_path.exists():
-        print_summary(results_path)
+    # Freqtrade 2026.x writes a timestamped zip + .last_result.json pointer and
+    # ignores --export-filename for JSON, so resolve the real results file.
+    resolved = resolve_results_file(results_path)
+    if resolved is not None:
+        print_summary(resolved)
+    else:
+        print("No backtest results file found; see freqtrade output above.")
 
     sys.exit(result.returncode)
 
 
+def resolve_results_file(expected: Path) -> Path | None:
+    """Return the actual results JSON (plain or inside the latest zip)."""
+    if expected.exists():
+        return expected
+    pointer = expected.parent / ".last_result.json"
+    try:
+        latest = json.loads(pointer.read_text()).get("latest_backtest", "")
+        if latest:
+            candidate = expected.parent / latest
+            if candidate.suffix == ".zip" and candidate.exists():
+                return candidate
+            if candidate.exists():
+                return candidate
+    except (OSError, json.JSONDecodeError):
+        pass
+    return None
+
+
+def load_results(path: Path) -> dict:
+    if path.suffix == ".zip":
+        import zipfile
+
+        with zipfile.ZipFile(path) as archive:
+            names = [n for n in archive.namelist() if n.endswith(".json") and "config" not in n and "market_change" not in n and "wallet" not in n]
+            if not names:
+                raise ValueError(f"No results JSON inside {path.name}")
+            with archive.open(sorted(names)[0]) as handle:
+                return json.load(handle)
+    return json.loads(path.read_text())
+
+
 def print_summary(path: Path) -> None:
     try:
-        data = json.loads(path.read_text())
+        data = load_results(path)
         strategy_results = list(data.get("strategy", {}).values())
         if not strategy_results:
             return
         result = strategy_results[0]
         total_trades = result.get("total_trades", 0)
         wins = result.get("wins", 0)
+        # Freqtrade 2026.x: profit_total is a ratio, profit_total_abs is stake
+        # currency; max_drawdown_account is the wallet drawdown ratio.
+        profit_abs = result.get("profit_total_abs", result.get("profit_total", 0))
+        drawdown = result.get("max_drawdown_account", result.get("max_drawdown", 0))
         print("\n" + "=" * 60)
         print("AIRSI ALGOTRADER BACKTEST SUMMARY")
         print("=" * 60)
         print(f"  Total trades:     {total_trades}")
         print(f"  Win rate:         {wins / max(total_trades, 1) * 100:.1f}%")
-        print(f"  Total profit:     {result.get('profit_total', 0):.4f} USDT")
+        print(f"  Total profit:     {profit_abs:.4f} USDT")
         print(f"  Profit factor:    {result.get('profit_factor', 0):.2f}")
-        print(f"  Max drawdown:     {result.get('max_drawdown', 0) * 100:.2f}%")
+        print(f"  Max drawdown:     {drawdown * 100:.2f}%")
         print(f"  Sharpe ratio:     {result.get('sharpe', 'N/A')}")
         print("=" * 60)
     except Exception as exc:

@@ -53,7 +53,15 @@ python3 scripts/run_backtest.py --config bot/config.custom.json
 
 ```bash
 source scripts/activate.sh
-cd bot && python3 -m pytest tests/ -v
+python3 -m pytest bot/tests/test_ai_client.py bot/tests/test_market_intelligence.py -v --noconftest
+```
+
+In this container that is 19/19 green. Strategy tests (`test_strategy.py`) need
+pandas/numpy + system `libstdc++` + freqtrade, so on a full PC/VPS run the whole suite:
+
+```bash
+source scripts/activate.sh
+cd bot && python3 -m pytest tests/ -v && cd ..
 ```
 
 Tests include:
@@ -74,16 +82,25 @@ source scripts/activate.sh
 bash scripts/run_intelligence.sh
 ```
 
-Start the bot in a second terminal:
+Start the bot in a second terminal (paper-micro mirrors the $5-10 real plan):
 
 ```bash
 source scripts/activate.sh
-bash scripts/run_bot.sh paper
+bash scripts/run_bot.sh paper-micro
+```
+
+`paper` respects `EXCHANGE` in `.env` (`okx` = cheapest 0.08% maker). Smoke-test the
+intelligence worker any time without keys:
+
+```bash
+source scripts/activate.sh
+python3 bot/market_intelligence.py --once
 ```
 
 The intelligence worker can only veto new entries. It cannot place trades, select pairs, change stake size, set leverage, or close positions. Missing or expired snapshots fail closed.
 
-- Virtual $1,000 USDT wallet
+- Paper-micro: $10 virtual wallet, $5 x1 BTC/USDT (closest to $5-10 real)
+- Paper default: $1,000 virtual wallet (legacy template)
 - Watch Telegram for alerts
 - Only proceed to live after **2 consistent weeks** of positive results
 

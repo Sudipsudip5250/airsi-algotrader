@@ -39,7 +39,7 @@ AIRSI AlgoTrader owns execution, strategy signals, Freqtrade protections, exchan
 | Telegram notifier | Operator alerts and summaries | No |
 | Express API | Authenticated proxy to Freqtrade telemetry | No direct exchange access |
 | React dashboard | Status, positions, trades, performance, logs | No direct exchange access |
-| Docker Compose | Local paper stack, intelligence worker, and optional Ollama service | No |
+| Docker Compose | Local paper stack, intelligence worker (API-only AI) | No |
 
 The intelligence worker is deliberately isolated from exchange credentials and the Freqtrade control API. Its output can only veto new live/dry-run entries; it cannot select pairs, change stake size, set leverage, or close positions.
 

@@ -1,4 +1,11 @@
-# AIRSI AlgoTrader Foundation Audit
+# AIRSI AlgoTrader Foundation Audit — ARCHIVED (26 August 2026)
+
+> Historical record. This audit describes the repo as of 26 Aug 2026 and is kept
+> for traceability. Do not follow its model names or setup steps literally —
+> `llama-3.1-8b-instant` (Groq) shut down 08/16/26, `gemini-2.0-flash` shut down
+> 06/01/26, and Ollama was removed in favour of API-only providers.
+> Current sources of truth: `docs/quickstart.md`, `docs/api-keys.md`,
+> `docs/testing.md`, `.env.example`.
 
 **Date:** 26 August 2026
 **Repository:** `Sudipsudip5250/airsi-algotrader`

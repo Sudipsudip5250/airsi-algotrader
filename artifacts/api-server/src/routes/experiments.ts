@@ -20,6 +20,7 @@ const DECISIONS_DIR = join(ROOT, "experiments", "decisions");
 const PROFILES_DIR = join(ROOT, "experiments", "experimental-profiles");
 const ACTION_LOG = join(ROOT, "experiments", "agent-actions.jsonl");
 const PAPER_TEMPLATE = join(ROOT, "bot", "config.paper.json");
+const AI_DECISIONS_LOG = join(ROOT, "experiments", "ai-decisions.jsonl");
 const MAX_LIMIT = 200;
 const ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_.-]{2,127}$/;
 const ALLOWED_DECISIONS = new Set(["approve", "reject", "request-more-data"]);
@@ -277,6 +278,55 @@ router.get("/experiments", async (req: Request, res: Response) => {
     return res.json({ experiments, total: experiments.length });
   } catch {
     return res.status(503).json({ error: "Experiment history unavailable" });
+  }
+});
+
+router.get("/experiments/ai-stats", async (_req: Request, res: Response) => {
+  try {
+    if (!existsSync(AI_DECISIONS_LOG)) {
+      return res.json({ decisions: 0, allows: 0, by_risk: {}, by_provider: {}, outcomes: 0, profit_sum: 0 });
+    }
+    const text = await readFile(AI_DECISIONS_LOG, "utf8");
+    const lines = text.split("\n").slice(-2000).filter(Boolean);
+    let decisions = 0;
+    let allows = 0;
+    const byRisk: Record<string, number> = {};
+    const byProvider: Record<string, number> = {};
+    let outcomes = 0;
+    let profitSum = 0;
+    for (const line of lines) {
+      try {
+        const rec = JSON.parse(line) as Record<string, unknown>;
+        if (rec.event === "ai_decision") {
+          decisions += 1;
+          const action = rec.action as Record<string, unknown> | undefined;
+          if (action?.allow_long_entries === true) allows += 1;
+          if (typeof action?.risk_level === "string") {
+            byRisk[action.risk_level] = (byRisk[action.risk_level] ?? 0) + 1;
+          }
+          if (typeof rec.provider === "string") {
+            byProvider[rec.provider] = (byProvider[rec.provider] ?? 0) + 1;
+          }
+        } else if (rec.event === "trade_outcome") {
+          outcomes += 1;
+          if (typeof rec.profit_abs === "number" && Number.isFinite(rec.profit_abs)) {
+            profitSum += rec.profit_abs;
+          }
+        }
+      } catch {
+        continue;
+      }
+    }
+    return res.json({
+      decisions,
+      allows,
+      by_risk: byRisk,
+      by_provider: byProvider,
+      outcomes,
+      profit_sum: Math.round(profitSum * 10000) / 10000,
+    });
+  } catch {
+    return res.status(503).json({ error: "AI stats unavailable" });
   }
 });
 

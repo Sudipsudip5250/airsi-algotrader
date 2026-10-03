@@ -5,6 +5,7 @@ from market_intelligence import (
     IntelligenceDecision,
     MarketSnapshot,
     _host_is,
+    _llm_candidates,
     _llm_settings,
     _looks_paid,
     deterministic_risk,
@@ -76,10 +77,12 @@ def test_naive_decision_timestamps_fail_closed(tmp_path):
 def test_llm_settings_skip_paid_openai_by_default(monkeypatch):
     monkeypatch.delenv("AI_ALLOW_PAID", raising=False)
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setenv("POLLINATIONS_DISABLED", "1")
     monkeypatch.setenv("LLM_API_BASE", "https://api.openai.com/v1")
     monkeypatch.setenv("LLM_API_KEY", "sk-test")
     monkeypatch.setenv("LLM_MODEL", "gpt-5-mini")
-    monkeypatch.setattr("market_intelligence._ollama_available", lambda _url: False)
     base, key, model, cost = _llm_settings()
     assert key == ""
     assert model == ""
@@ -90,20 +93,71 @@ def test_llm_settings_prefer_groq_free(monkeypatch):
     monkeypatch.delenv("AI_ALLOW_PAID", raising=False)
     monkeypatch.delenv("LLM_API_KEY", raising=False)
     monkeypatch.delenv("LLM_API_BASE", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setenv("POLLINATIONS_DISABLED", "1")
     monkeypatch.setenv("GROQ_API_KEY", "gsk-test")
-    monkeypatch.setenv("GROQ_MODEL", "llama-3.1-8b-instant")
-    monkeypatch.setattr("market_intelligence._ollama_available", lambda _url: False)
+    monkeypatch.setenv("GROQ_MODEL", "openai/gpt-oss-20b")
     base, key, model, cost = _llm_settings()
     assert urlparse(base).hostname == "api.groq.com"
     assert key == "gsk-test"
-    assert model == "llama-3.1-8b-instant"
+    assert model == "openai/gpt-oss-20b"
     assert cost == "free"
+
+
+def test_llm_candidates_include_keyless_pollinations_last(monkeypatch):
+    monkeypatch.delenv("LLM_API_BASE", raising=False)
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("POLLINATIONS_DISABLED", raising=False)
+    candidates = _llm_candidates()
+    assert candidates
+    assert candidates[-1][0] == "Pollinations"
+    assert candidates[-1][2] == ""
 
 
 def test_looks_paid_matches_hostname_not_url_substring():
     assert _looks_paid("https://api.openai.com/v1", "gpt-5-mini") is True
-    assert _looks_paid("https://api.groq.com/openai/v1", "llama-3.1-8b-instant") is False
+    assert _looks_paid("https://api.groq.com/openai/v1", "openai/gpt-oss-20b") is False
     assert _looks_paid("https://evil.example/openai.com", "llama") is False
     assert _looks_paid("https://notopenai.com/v1", "llama") is False
     assert _host_is("https://api.groq.com/openai/v1", "groq.com") is True
     assert _host_is("https://attacker.example/?q=groq.com", "groq.com") is False
+
+
+def test_normalize_risk_variants():
+    from market_intelligence import _normalize_risk, _parse_confidence, _parse_risk_json
+    assert _normalize_risk("Low") == "normal"
+    assert _normalize_risk("moderate") == "guarded"
+    assert _normalize_risk("ELEVATED") == "elevated"
+    assert _normalize_risk("high") == "high"
+    assert _normalize_risk("unknown-xyz") == ""
+    assert _parse_confidence("low") == 0.3
+    assert _parse_confidence(0.7) == 0.7
+    assert _parse_confidence("nonsense") == 0.0
+    parsed = _parse_risk_json('```json\n{"risk_level":"normal","allow_long_entries":true,"confidence":0.7,"reason":"ok"}\n```')
+    assert parsed["risk_level"] == "normal"
+
+
+def test_parse_risk_json_recovers_truncated_output():
+    from market_intelligence import _parse_risk_json
+    truncated = '{"risk_level": "guarded", "allow_long_entries": true, "confidence": 0.65, "reason": "BTC up slightly but funding eleva'
+    parsed = _parse_risk_json(truncated)
+    assert parsed["risk_level"] == "guarded"
+    assert parsed["allow_long_entries"] is True
+    assert parsed["confidence"] == 0.65
+    assert parsed["reason"].startswith("BTC up slightly")
+
+
+def test_intelligence_payload_stays_compact():
+    # 413 guard: 60 full news items must still produce a small request body.
+    import json
+    from market_intelligence import MarketSnapshot, NewsItem
+    news = [NewsItem(title="T" * 400, url="http://example.com/" + str(i), source="S" * 200, published_at="p") for i in range(60)]
+    snap = MarketSnapshot(collected_at="2026-09-10T00:00:00+00:00", btc_change_24h=1.0, total_market_cap_change_24h=0.5, news=news)
+    headlines = ["- " + ((i.title or "")[:150]) + " | " + ((i.source or "")[:60]) for i in snap.news[:12]]
+    body = json.dumps({"market": {"btc_change_24h": snap.btc_change_24h}, "articles": "\n".join(headlines)})
+    assert len(headlines) == 12
+    assert len(body) < 6000, len(body)

@@ -1,0 +1,50 @@
+{
+  "timestamp": "2026-09-14T12:16:06.575115+00:00",
+  "mode": "paper-micro",
+  "replit_run": "modules = [\"nodejs-20\", \"python-3.11\"]\n\nrun = \"bash scripts/replit_boot.sh\"\n\n[[ports]]\nlocalPort = 8080\nexternalPort = 80\n",
+  "ledger": {
+    "decisions": 31,
+    "outcomes": 0,
+    "risk": {
+      "normal": 2,
+      "elevated": 9,
+      "guarded": 17,
+      "high": 3
+    },
+    "providers": {
+      "deterministic-fallback": 2,
+      "Groq": 28,
+      "OpenRouter": 1
+    },
+    "file": "/home/runner/workspace/experiments/ai-decisions.jsonl",
+    "bytes": 34362
+  },
+  "market_intelligence": {
+    "generated_at": "2026-09-14T12:15:08.368241+00:00",
+    "expires_at": "2026-09-14T12:20:08.368241+00:00",
+    "allow_long_entries": false,
+    "risk_level": "high",
+    "confidence": 1.0,
+    "reason": "Market intelligence unavailable; fail-safe veto is active",
+    "source_count": 0,
+    "news_count": 0,
+    "model": "none",
+    "snapshot_hash": "unavailable",
+    "errors": [
+      "market data: HTTPError: 429 Client Error: Too Many Requests for url: https://api.coingecko.com/api/v3/global"
+    ]
+  },
+  "log_sizes": {
+    ".gitkeep": 0,
+    "intelligence.log": 570,
+    "freqtrade.out.log": 127332,
+    "freqtrade.log": 123741,
+    "mode": 12,
+    "watchdog.log": 445,
+    "watch.state": 21,
+    "intelligence.pid": 4,
+    "freqtrade.pid": 4,
+    "watch.pid": 4
+  },
+  "analyze": "============================================================\nPAPER COLLECTION REPORT\n============================================================\nLedger: /home/runner/workspace/experiments/ai-decisions.jsonl (31 decisions, 0 outcomes)\n\n--- Veto behavior ---\nAllow rate: 17/31 (54.8%)\nRisk mix: {'normal': 2, 'elevated': 9, 'guarded': 17, 'high': 3}\nProviders: {'deterministic-fallback': 2, 'Groq': 28, 'OpenRouter': 1}\n\n--- Paper P/L ---\nNo closed trades yet. (Freqtrade creates its DB on the first fill;\n run scripts/sync_paper_outcomes.py after trades close.)\n\n--- Avoided-loss estimate (blocked windows) ---\nstatus: no blocked windows with kline coverage yet (re-run download_data.py weekly)\n\n--- Verdict ---\nKEEP COLLECTING: 169 more decisions (~42h); 5 more closed paper trades.\nBot stays on paper. Nothing changes in production until READY.\n============================================================\n"
+}

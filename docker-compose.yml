@@ -30,13 +30,23 @@ services:
       - FREQTRADE_API_USER=${FREQTRADE_API_USER:?Set FREQTRADE_API_USER before starting the stack}
       - FREQTRADE_API_PASS=${FREQTRADE_API_PASS:?Set FREQTRADE_API_PASS before starting the stack}
       - FREQTRADE_JWT_SECRET=${FREQTRADE_JWT_SECRET:?Set FREQTRADE_JWT_SECRET before starting the stack}
+      - EXCHANGE=${EXCHANGE:-okx}
       - EXCHANGE_API_KEY=${EXCHANGE_API_KEY:-}
       - EXCHANGE_API_SECRET=${EXCHANGE_API_SECRET:-}
+      - WALLET_MODE=${WALLET_MODE:-custodial}
+      - WALLET_PROVIDER=${WALLET_PROVIDER:-none}
+      - WALLET_ADDRESS=${WALLET_ADDRESS:-}
+      - WALLET_CHAIN=${WALLET_CHAIN:-base}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GROQ_MODEL=${GROQ_MODEL:-openai/gpt-oss-20b}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-openrouter/free}
       - HUGGINGFACE_API_KEY=${HUGGINGFACE_API_KEY:-}
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-mistral}
+      - HUGGINGFACE_MODEL=${HUGGINGFACE_MODEL:-HuggingFaceH4/zephyr-7b-beta}
+      - POLLINATIONS_MODEL=${POLLINATIONS_MODEL:-openai}
+      - POLLINATIONS_DISABLED=${POLLINATIONS_DISABLED:-0}
       - AI_ALLOW_PAID=${AI_ALLOW_PAID:-0}
     entrypoint: ["/bin/bash", "/freqtrade/project_scripts/freqtrade-entrypoint.sh"]
     healthcheck:
@@ -58,9 +68,13 @@ services:
       - LLM_API_KEY=${LLM_API_KEY:-}
       - LLM_MODEL=${LLM_MODEL:-}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
-      - GROQ_MODEL=${GROQ_MODEL:-llama-3.1-8b-instant}
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-mistral}
+      - GROQ_MODEL=${GROQ_MODEL:-openai/gpt-oss-20b}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-openrouter/free}
+      - POLLINATIONS_MODEL=${POLLINATIONS_MODEL:-openai}
+      - POLLINATIONS_DISABLED=${POLLINATIONS_DISABLED:-0}
       - AI_ALLOW_PAID=${AI_ALLOW_PAID:-0}
       - NEWS_RSS_URLS=${NEWS_RSS_URLS:-}
       - INTELLIGENCE_POLL_SECONDS=${INTELLIGENCE_POLL_SECONDS:-900}
@@ -95,18 +109,3 @@ services:
     depends_on:
       freqtrade:
         condition: service_healthy
-
-  # ── Ollama (optional local AI) ────────────────────────────────────
-  ollama:
-    image: ollama/ollama:latest
-    container_name: airsi-algotrader-ollama
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    profiles:
-      - local-ai     # Only starts with: docker compose --profile local-ai up
-
-volumes:
-  ollama_data:

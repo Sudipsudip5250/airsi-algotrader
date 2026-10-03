@@ -42,8 +42,8 @@ Visit `http://localhost:23183` (or the URL shown in terminal).
 # Paper trading mode (safe)
 docker compose up
 
-# With local Ollama AI
-docker compose --profile local-ai up
+# Standard stack (API-only AI)
+docker compose up
 
 # Stop everything
 docker compose down

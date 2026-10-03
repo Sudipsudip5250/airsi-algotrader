@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from ai_client import AIClient, CompletionResult, OllamaClient, allow_paid_providers
+from ai_client import AIClient, CompletionResult, PollinationsClient, allow_paid_providers
 
 
 class Provider:
@@ -101,7 +101,24 @@ def test_paid_provider_used_when_flag_enabled(monkeypatch):
     assert result.cost_class == "paid"
 
 
-def test_ollama_available_is_false_when_unreachable(monkeypatch):
-    client = OllamaClient(base_url="http://127.0.0.1:9")
-    monkeypatch.setattr("ai_client.requests.get", lambda *args, **kwargs: (_ for _ in ()).throw(ConnectionError("down")))
-    assert client.available() is False
+def test_keyless_pollinations_is_last_resort(monkeypatch):
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("HUGGINGFACE_API_KEY", raising=False)
+    monkeypatch.delenv("POLLINATIONS_DISABLED", raising=False)
+    client = AIClient()
+    names = [getattr(p, "name", "") for p in client._static_providers]
+    assert "Pollinations" in names
+    # Pollinations client sends no auth header (keyless).
+    poll = next(p for p in client._static_providers if getattr(p, "name", "") == "Pollinations")
+    assert isinstance(poll, PollinationsClient)
+    assert poll.api_key == ""
+
+
+def test_pollinations_disabled_removes_keyless(monkeypatch):
+    monkeypatch.setenv("POLLINATIONS_DISABLED", "1")
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    client = AIClient()
+    names = [getattr(p, "name", "") for p in client._static_providers]
+    assert "Pollinations" not in names

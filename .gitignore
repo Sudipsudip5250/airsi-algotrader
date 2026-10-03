@@ -38,8 +38,15 @@ bot/user_data/data/*
 !bot/user_data/data/.gitkeep
 bot/user_data/backtest_results/*
 !bot/user_data/backtest_results/.gitkeep
-bot/user_data/logs/*
+# ── Freqtrade logs — keep latest on disk, rotated but never deleted by git ──
+# Raw logs are the collection dataset (survives reboot). Only summaries go to git.
+bot/user_data/logs/*.log.*
+bot/user_data/logs/*.log.[0-9]
 !bot/user_data/logs/.gitkeep
+# Current logs kept local-only (not committed) but preserved on reboot
+# To keep them: nothing to do — they live on disk. To archive: copy to
+# experiments/logs/weekly/ or upload to object storage.
+bot/user_data/logs/*.log
 bot/user_data/hyperopts/*
 !bot/user_data/hyperopts/.gitkeep
 bot/user_data/notebooks/*
@@ -120,7 +127,14 @@ pnpm-debug.log*
 # Local self-improvement runtime (proposals/evaluations/decisions remain git-friendly)
 experiments/cache/
 experiments/agent-actions.jsonl
+experiments/ai-decisions.jsonl
+experiments/ai-decisions-*.jsonl.gz
 experiments/QUEUE.md
+experiments/logs/
+!experiments/session-snapshots/
+!experiments/session-snapshots/.gitkeep
+!experiments/session-snapshots/*.json
+!experiments/session-snapshots/*.log
 
 # Generated user data (freqtrade create-userdir at repo root)
 /user_data/

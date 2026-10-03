@@ -97,19 +97,24 @@ python -m pip install --upgrade pip --quiet
 python -m pip install -r bot/requirements.txt
 Print-OK "All Python packages installed"
 
-# ── Step 5: Install Node.js dependencies ──────────────────────────────────────
+# ── Step 5: Install Node.js dependencies (dashboard, OPTIONAL) ───────────────
+# Never aborts the installer: the trading bot does not need Node.
 
-Print-Step "5/6" "Installing Node.js dependencies (dashboard)"
+Print-Step "5/6" "Installing Node.js dependencies (dashboard, optional)"
 
 if (Check-Command "node") {
     Print-OK "Node.js found: $(node --version)"
-    if (Check-Command "pnpm") {
+    try {
+        if (-not (Check-Command "pnpm")) {
+            npm install -g pnpm
+        }
+        # pnpm self-manages its version; the bootstrap can fail on some machines.
+        pnpm --version | Out-Null
         pnpm install --frozen-lockfile
         Print-OK "pnpm packages installed"
-    } elseif (Check-Command "npm") {
-        npm install -g pnpm
-        pnpm install --frozen-lockfile
-        Print-OK "pnpm installed and packages installed"
+    } catch {
+        Write-Host "  Dashboard install skipped ($($_.Exception.Message)) — trading bot is unaffected." -ForegroundColor Yellow
+        Write-Host "  See docs/dashboard.md to install the dashboard manually." -ForegroundColor Yellow
     }
 } else {
     Write-Host "  Node.js not found — skipping dashboard setup." -ForegroundColor Yellow
@@ -129,29 +134,11 @@ if (Test-Path ".env") {
     Write-Host "  ⚠  IMPORTANT: Open .env and fill in your keys:" -ForegroundColor Yellow
     Write-Host "     - TELEGRAM_BOT_TOKEN    (from @BotFather)" -ForegroundColor Cyan
     Write-Host "     - TELEGRAM_CHAT_ID      (from getUpdates API)" -ForegroundColor Cyan
-    Write-Host "     - GROQ_API_KEY          (from console.groq.com — free)" -ForegroundColor Cyan
-    Write-Host "     - OPENROUTER_API_KEY    (from openrouter.ai/keys)" -ForegroundColor Cyan
+    Write-Host "     - GROQ_API_KEY          (from console.groq.com — free, primary)" -ForegroundColor Cyan
+    Write-Host "     - GEMINI_API_KEY        (from aistudio.google.com — free, secondary)" -ForegroundColor Cyan
+    Write-Host "     - OPENROUTER_API_KEY    (from openrouter.ai/keys, use openrouter/free)" -ForegroundColor Cyan
     Write-Host "     - HUGGINGFACE_API_KEY   (from hf.co/settings/tokens)" -ForegroundColor Cyan
-}
-
-# ── Optional: Ollama ──────────────────────────────────────────────────────────
-
-Write-Host ""
-$installOllama = Read-Host "Install Ollama (local AI, no API key needed)? [y/N]"
-if ($installOllama -eq "y" -or $installOllama -eq "Y") {
-    if (Check-Command "ollama") {
-        Print-Skip "Ollama already installed"
-    } else {
-        Write-Host "  Downloading Ollama for Windows..." -ForegroundColor Yellow
-        $ollamaUrl = "https://ollama.com/download/OllamaSetup.exe"
-        $dest = "$env:TEMP\OllamaSetup.exe"
-        Invoke-WebRequest -Uri $ollamaUrl -OutFile $dest
-        Start-Process $dest -Wait
-        Print-OK "Ollama installed"
-    }
-    Write-Host "  Pulling mistral model (may take 5-10 min on first run)..."
-    ollama pull mistral
-    Print-OK "Mistral model ready"
+    Write-Host "     - EXCHANGE              (okx|binance|kraken, default okx)" -ForegroundColor Cyan
 }
 
 # ── Create required folders ───────────────────────────────────────────────────

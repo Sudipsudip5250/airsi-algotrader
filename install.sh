@@ -74,10 +74,11 @@ cat > scripts/activate.sh << 'ACTEOF'
 #!/usr/bin/env bash
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source "${SCRIPT_DIR}/../venv/bin/activate"
-export LD_LIBRARY_PATH="${SCRIPT_DIR}/../venv/lib"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/env_libs.sh"
 ACTEOF
-chmod +x scripts/activate.sh
-ok "Created scripts/activate.sh"
+chmod +x scripts/activate.sh scripts/env_libs.sh
+ok "Created scripts/activate.sh (+ env_libs.sh)"
 
 # shellcheck disable=SC1091
 source venv/bin/activate
@@ -91,18 +92,32 @@ step "4/6" "Installing Python packages (2-5 minutes)"
     python -m pip install -r bot/requirements.txt
 ok "All Python packages installed"
 
-# ── Step 5: Node.js dependencies ─────────────────────────────────────────────
+# ── Step 5: Node.js dependencies (dashboard, OPTIONAL) ──────────────────────
+# This step never aborts the installer: the trading bot does not need Node.
+# pnpm self-manages its version via packageManager; on sandboxed/nix systems
+# that bootstrap can crash, so any failure degrades to a warning.
 
-step "5/6" "Installing Node.js dependencies (dashboard)"
+step "5/6" "Installing Node.js dependencies (dashboard, optional)"
 
+dashboard_ok=0
 if command -v node &>/dev/null; then
     skip "Node.js: $(node --version)"
     if ! command -v pnpm &>/dev/null; then
-        npm install -g pnpm --quiet
+        npm install -g pnpm --quiet || warn "Could not install pnpm globally — dashboard will be skipped"
     fi
-    if [[ -f "package.json" ]]; then
+    if ! pnpm --version >/dev/null 2>&1; then
+        warn "pnpm is broken on this machine (version bootstrap fails) — skipping dashboard install."
+        warn "Trading bot is unaffected. See docs/dashboard.md to install the dashboard manually."
+    elif [[ -f "package.json" ]]; then
+        set +e
         pnpm install --frozen-lockfile --reporter=silent
-        ok "pnpm packages installed"
+        dashboard_ok=$?
+        set -e
+        if (( dashboard_ok == 0 )); then
+            ok "pnpm packages installed"
+        else
+            warn "pnpm install failed (exit $dashboard_ok) — skipping dashboard. Trading bot is unaffected."
+        fi
     else
         warn "No package.json found — skipping pnpm install"
     fi
@@ -123,37 +138,18 @@ else
     warn "IMPORTANT: Open .env and fill in your API keys:"
     echo -e "     ${CYAN}TELEGRAM_BOT_TOKEN${NC}    ← from @BotFather on Telegram"
     echo -e "     ${CYAN}TELEGRAM_CHAT_ID${NC}      ← from getUpdates API call"
-    echo -e "     ${CYAN}OLLAMA_BASE_URL${NC}       ← local, preferred when Ollama is running"
-    echo -e "     ${CYAN}GROQ_API_KEY${NC}          ← optional free tier at console.groq.com"
-    echo -e "     ${CYAN}OPENROUTER_API_KEY${NC}    ← optional; use a :free model"
+    echo -e "     ${CYAN}GROQ_API_KEY${NC}          ← free tier at console.groq.com (primary)"
+    echo -e "     ${CYAN}GEMINI_API_KEY${NC}        ← free tier at aistudio.google.com (secondary)"
+    echo -e "     ${CYAN}OPENROUTER_API_KEY${NC}    ← optional; use openrouter/free"
     echo -e "     ${CYAN}HUGGINGFACE_API_KEY${NC}   ← optional free tier at hf.co/settings/tokens"
+    echo -e "     ${CYAN}EXCHANGE${NC}              ← okx | binance | kraken (default okx)"
     echo -e "     ${CYAN}AI_ALLOW_PAID${NC}         ← keep 0 unless you explicitly want paid models"
-fi
-
-# ── Optional: Ollama ──────────────────────────────────────────────────────────
-
-echo ""
-read -rp "Install Ollama (local AI, no API key needed)? [y/N]: " INSTALL_OLLAMA
-if [[ "${INSTALL_OLLAMA,,}" == "y" ]]; then
-    if command -v ollama &>/dev/null; then
-        skip "Ollama already installed"
-    else
-        echo "  Downloading and installing Ollama..."
-        curl -fsSL https://ollama.com/install.sh | sh
-        ok "Ollama installed"
-    fi
-    echo "  Starting Ollama..."
-    ollama serve &>/dev/null &
-    sleep 3
-    echo "  Pulling mistral model (~4GB, please wait)..."
-    ollama pull mistral
-    ok "Mistral model ready at http://localhost:11434"
 fi
 
 # ── Create required directories ───────────────────────────────────────────────
 
 mkdir -p bot/user_data/{data,logs,backtest_results}
-chmod +x scripts/activate.sh scripts/setup_ollama.sh scripts/download_data.py scripts/run_backtest.py
+chmod +x scripts/activate.sh scripts/env_libs.sh scripts/download_data.py scripts/run_backtest.py scripts/run_bot.sh scripts/run_intelligence.sh
 
 # ── Done ───────────────────────────────────────────────────────────────────────
 
@@ -163,7 +159,7 @@ echo -e "${GREEN}║  ✔  Setup Complete!                                  ║$
 echo -e "${GREEN}╠══════════════════════════════════════════════════════╣${NC}"
 echo -e "${GREEN}║                                                      ║${NC}"
 echo -e "${GREEN}║  Next steps:                                         ║${NC}"
-echo -e "${GREEN}║  1. Optional: Ollama/Groq keys; keep AI_ALLOW_PAID=0 ║${NC}"
+echo -e "${GREEN}║  1. Add Groq/Gemini/OpenRouter keys; keep AI_ALLOW_PAID=0 ║${NC}"
 echo -e "${GREEN}║  2. source scripts/activate.sh                       ║${NC}"
 echo -e "${GREEN}║     or source venv/bin/activate                       ║${NC}"
 echo -e "${GREEN}║  3. python scripts/download_data.py                  ║${NC}"

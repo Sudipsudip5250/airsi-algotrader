@@ -44,6 +44,10 @@ def main() -> int:
             "--days",    str(args.days),
             "--datadir", str(data_dir),
             "--userdir", str(user_dir),
+            # Backfill before existing data start: without --prepend a later
+            # --days 30 run after a --days 7 run only appends forward and the
+            # file stays 7 days long (then backtests die on startup candles).
+            "--prepend",
         ]
         print(f"\nDownloading {tf} data for {args.days} days...")
         print("  " + " ".join(cmd))

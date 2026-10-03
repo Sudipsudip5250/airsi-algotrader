@@ -10,7 +10,7 @@ Routine researcher runs should **not** pass `--use-ai`. The default path is dete
 python agents/researcher.py --use-ai
 ```
 
-The existing `bot/ai_client.py` chain is used: **Ollama (if running) → Groq free → Hugging Face free → OpenRouter `:free` → plain text**. Paid models are skipped unless `AI_ALLOW_PAID=1`. Responses are cached under `experiments/cache/ai/` for 24 hours. Duplicate pending ideas are skipped unless `--force` is passed. Logs and stderr print `provider=` and `cost_class=`.
+The existing `bot/ai_client.py` chain is used: **Groq free → Gemini Flash free → Hugging Face free → OpenRouter `openrouter/free` → Pollinations keyless → plain text**. Paid models are skipped unless `AI_ALLOW_PAID=1`. Responses are cached under `experiments/cache/ai/` for 24 hours. Duplicate pending ideas are skipped unless `--force` is passed. Logs and stderr print `provider=` and `cost_class=`.
 
 ## Research day (recommended)
 
@@ -90,6 +90,20 @@ To call the existing advisory fallback chain, add `--use-ai` to the researcher c
 ## What evaluation means
 
 The default evaluator is a dry comparison of expectancy, maximum drawdown, and number of trades. A no-op candidate (no Freqtrade run) is marked `inconclusive` rather than “promising.” `--run-backtest` may run a limited Freqtrade backtest against a **temporary** experimental config copied from the paper template into a throwaway directory. Metrics are parsed from Freqtrade JSON or zip exports (`total_trades` / `profit_total` / `max_relative_drawdown` when present). Missing freqtrade, missing data, a protected target, or a failed run is `not_run` and fail-closed — the evaluator never invents metrics and never writes to production strategy or live configuration. Download OHLCV first with `python scripts/download_data.py --days 30`.
+
+## Live AI tracking (complements this loop)
+
+Since Sep 2026 the intelligence worker also appends every live decision to
+`experiments/ai-decisions.jsonl` (gitignored, append-only): timestamp,
+provider/model/cost, market snapshot hash + BTC moves/funding/news counts,
+action (allow/risk/confidence/reason), latency. Trade outcomes can be joined
+later with `python scripts/log_trade_outcomes.py --trades <export.json>`, and
+`GET /api/experiments/ai-stats` surfaces allow-rate by risk level, provider
+counts, and joined P&L for the dashboard.
+
+The researcher may cite that summary as extra evidence in a proposal, but the
+same human-review boundary applies: tracking never auto-edits the strategy or
+any paper/live profile.
 
 ## Human-review boundary
 

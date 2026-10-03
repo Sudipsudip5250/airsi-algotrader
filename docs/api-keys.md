@@ -13,21 +13,22 @@ All API keys are stored in `.env` (copied from `.env.example`).
 
 ---
 
-## AI provider order (free-first)
+## AI provider order (free-first, API-only, no local daemon)
 
-Routine commentary and research use this order:
+Routine commentary, classification, and research use this order:
 
-1. **Ollama** — local, free, used only when `OLLAMA_BASE_URL` is reachable
-2. **Groq** — free tier (`GROQ_API_KEY`)
+1. **Groq** — free tier, primary (`GROQ_API_KEY`, default `GROQ_MODEL=openai/gpt-oss-20b`; `llama-3.1-8b-instant` shut down 08/16/26)
+2. **Gemini** — free tier, secondary (`GEMINI_API_KEY`, default `GEMINI_MODEL=gemini-2.5-flash`; `gemini-2.0-flash` shut down 06/01/26)
 3. **Hugging Face** — free tier (`HUGGINGFACE_API_KEY`)
-4. **OpenRouter** — only models whose id contains `:free`, unless `AI_ALLOW_PAID=1`
-5. **Plain text** — always available; the bot keeps trading
+4. **OpenRouter** — `OPENROUTER_MODEL=openrouter/free` router (auto-picks a free model) or any `:free` id, unless `AI_ALLOW_PAID=1`
+5. **Pollinations keyless** — no key, free-trial last resort (`POLLINATIONS_MODEL=openai`; anon pool is rate-limited and sometimes budget-exhausted, so it is skipped automatically on quota text)
+6. **Plain text / deterministic** — always available; the bot keeps running and the strategy fails closed
 
-Set `AI_ALLOW_PAID=1` only for a human-triggered, high-value call. Logs print `provider=` and `cost_class=` (`free` / `low` / `paid`).
+Set `AI_ALLOW_PAID=1` only for a human-triggered, high-value call. Logs print `provider=` and `cost_class=` (`free` / `low` / `paid`). `OPENROUTER_API_KEY` is currently optional but recommended as failover — without it the chain is Groq → Gemini → HF → Pollinations → deterministic.
 
 ---
 
-## AI: Groq (Free — 14,400 requests/day)
+## AI: Groq (Free — limits per model, no card)
 
 1. Go to [console.groq.com](https://console.groq.com)
 2. Sign up free (Google/GitHub)
@@ -43,9 +44,11 @@ Set `AI_ALLOW_PAID=1` only for a human-triggered, high-value call. Logs print `p
 2. Sign up free
 3. Click "Create Key"
 4. Copy key
-5. Default model: `meta-llama/llama-3.1-8b-instruct:free`
-6. Paid models are skipped unless `AI_ALLOW_PAID=1`
-7. Browse models at [openrouter.ai/models](https://openrouter.ai/models)
+5. Default model: `openrouter/free` (router auto-picks a free model; survives rotation)
+6. Pinned alts: `openai/gpt-oss-20b:free`
+7. Paid models are skipped unless `AI_ALLOW_PAID=1`
+8. Browse models at [openrouter.ai/models](https://openrouter.ai/models)
+9. Note: `:free` allowance is 50 req/day, 1000/day after a one-time $10 credit top-up
 
 ---
 
@@ -59,10 +62,15 @@ Set `AI_ALLOW_PAID=1` only for a human-triggered, high-value call. Logs print `p
 
 ---
 
-## AI: Ollama (Local, No Key Needed) — preferred when running
+## AI: Groq (Free Tier, No Card) — primary
 
-Run on the same machine or a VPS. See [local-ai-setup.md](local-ai-setup.md).
-The client probes `/api/tags` with a short timeout and skips Ollama when it is down, so a missing local daemon does not stall commentary.
+Sign up at https://console.groq.com. Set `GROQ_API_KEY` and `GROQ_MODEL=openai/gpt-oss-20b`
+(quality alts: `openai/gpt-oss-120b`, `qwen/qwen3-32b`).
+Add `GEMINI_API_KEY` (`GEMINI_MODEL=gemini-2.5-flash`) as secondary,
+`OPENROUTER_API_KEY` with `OPENROUTER_MODEL=openrouter/free` as failover,
+Pollinations keyless as last resort. Reasoning models need `max_completion_tokens`
+of 1000+ (already set in `classify_news`); tiny limits return reasoning-only
+truncations.
 
 ---
 

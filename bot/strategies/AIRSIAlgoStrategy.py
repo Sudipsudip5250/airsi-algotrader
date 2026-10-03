@@ -13,6 +13,7 @@ remain outside this class.
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from freqtrade.strategy import DecimalParameter, IntParameter, IStrategy
+
+logger = logging.getLogger(__name__)
 
 
 class AIRSIAlgoStrategy(IStrategy):
@@ -157,10 +160,21 @@ class AIRSIAlgoStrategy(IStrategy):
 
         userdir = Path(str(self.config.get("user_data_dir", "bot/user_data")))
         path = userdir / self.intelligence_filename
+
+        def blocked(why: str, detail: str = "") -> bool:
+            # One line per candle per pair (1h timeframe: ~1 line/hour) so the
+            # operator can SEE the AI veto working in freqtrade.log.
+            extra = f" {detail[:160]}" if detail else ""
+            logger.info("AI veto blocks entries: %s.%s", why, extra)
+            return False
+
         try:
             decision = json.loads(path.read_text(encoding="utf-8"))
             if not isinstance(decision, dict):
-                return False
+                return blocked("snapshot-not-a-dict")
+            risk = decision.get("risk_level", "?")
+            model = decision.get("model", "?")
+            reason = str(decision.get("reason", ""))
 
             required = {
                 "generated_at", "expires_at", "allow_long_entries", "risk_level",
@@ -168,31 +182,38 @@ class AIRSIAlgoStrategy(IStrategy):
                 "snapshot_hash", "errors",
             }
             if set(decision) != required:
-                return False
+                return blocked("snapshot-schema-mismatch", f"risk={risk} model={model}")
             if type(decision["allow_long_entries"]) is not bool:
-                return False
+                return blocked("snapshot-bad-allow-flag", f"risk={risk} model={model}")
             if decision["risk_level"] not in {"normal", "guarded", "elevated", "high"}:
-                return False
+                return blocked("snapshot-bad-risk", f"risk={risk} model={model}")
             confidence = float(decision["confidence"])
             if not np.isfinite(confidence) or not 0.0 <= confidence <= 1.0:
-                return False
+                return blocked("snapshot-bad-confidence", f"risk={risk} model={model}")
             if type(decision["source_count"]) is not int or decision["source_count"] < 0:
-                return False
+                return blocked("snapshot-bad-source-count", f"risk={risk} model={model}")
             if type(decision["news_count"]) is not int or decision["news_count"] < 0:
-                return False
+                return blocked("snapshot-bad-news-count", f"risk={risk} model={model}")
             if not isinstance(decision["errors"], list) or not all(isinstance(item, str) for item in decision["errors"]):
-                return False
+                return blocked("snapshot-bad-errors", f"risk={risk} model={model}")
             if not all(isinstance(decision[key], str) and decision[key].strip() for key in ("generated_at", "expires_at", "reason", "model", "snapshot_hash")):
-                return False
+                return blocked("snapshot-missing-text", f"risk={risk} model={model}")
 
             expires_at = datetime.fromisoformat(decision["expires_at"])
             if expires_at.tzinfo is None:
-                return False
+                return blocked("snapshot-naive-timestamp", f"risk={risk} model={model}")
             if expires_at.astimezone(timezone.utc) <= datetime.now(timezone.utc):
-                return False
-            return decision["allow_long_entries"] and decision["risk_level"] not in {"high", "elevated"}
-        except (OSError, ValueError, TypeError, OverflowError, json.JSONDecodeError):
-            return False
+                return blocked("snapshot-expired", f"risk={risk} model={model}")
+            allowed = decision["allow_long_entries"] and decision["risk_level"] not in {"high", "elevated"}
+            if not allowed:
+                return blocked("risk-off", f"risk={risk} model={model} reason={reason}")
+            logger.debug(
+                "AI veto passes entries: risk=%s model=%s conf=%s",
+                risk, model, decision.get("confidence"),
+            )
+            return True
+        except (OSError, ValueError, TypeError, OverflowError, json.JSONDecodeError) as exc:
+            return blocked("snapshot-unreadable", str(exc))
 
     def populate_exit_trend(self, dataframe: pd.DataFrame, metadata: dict[str, Any]) -> pd.DataFrame:
         dataframe["exit_long"] = 0

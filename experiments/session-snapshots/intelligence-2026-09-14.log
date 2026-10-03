@@ -1,0 +1,4 @@
+Intelligence LLM Groq schema mode failed, retrying plain JSON: 400 Client Error: Bad Request for url: https://api.groq.com/openai/v1/chat/completions
+RSS feed failed (https://cointelegraph.com/rss): HTTPSConnectionPool(host='cointelegraph.com', port=443): Read timed out. (read timeout=10)
+RSS feed failed (https://cointelegraph.com/rss): HTTPSConnectionPool(host='cointelegraph.com', port=443): Read timed out. (read timeout=10)
+RSS feed failed (https://cointelegraph.com/rss): HTTPSConnectionPool(host='cointelegraph.com', port=443): Read timed out. (read timeout=10)

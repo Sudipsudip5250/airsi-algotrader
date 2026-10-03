@@ -4,9 +4,17 @@ The strategy must never depend on an LLM response to place or close a trade.
 This module is therefore advisory-only: every provider failure falls through to
 another provider and finally to a plain-text fallback.
 
-Default order is free-first: Ollama (when reachable) → Groq free tier →
-Hugging Face free tier → OpenRouter free models → plain text. Paid models are
-skipped unless AI_ALLOW_PAID is enabled.
+Default order is API-only, free-first, no local daemon required:
+Groq free -> Gemini Flash free -> Hugging Face free -> OpenRouter :free
+-> Pollinations keyless (free-trial last resort, 1 req/15s anon) -> plain text.
+Paid models are skipped unless AI_ALLOW_PAID is enabled.
+
+Current defaults (Sep 2026, verified vs Groq deprecations page):
+- Groq: openai/gpt-oss-20b (replaces deprecated llama-3.1-8b-instant, shutdown 08/16/26)
+  Quality alts: openai/gpt-oss-120b, qwen/qwen3-32b (replaces llama-3.3-70b-versatile)
+- Gemini: gemini-2.5-flash via OpenAI-compatible endpoint
+- OpenRouter: openrouter/free router (auto-picks free model) to survive rotation
+- Pollinations: model=openai (GPT-OSS 20B), no key, anon rate-limited
 """
 
 from __future__ import annotations
@@ -23,6 +31,22 @@ logger = logging.getLogger(__name__)
 
 PLAIN_TEXT_FALLBACK = "AI analysis unavailable — trade execution remains unaffected."
 _TRUTHY = {"1", "true", "yes", "on"}
+# Anon/shared pools sometimes return HTTP 200 with a quota error as text.
+# Never surface those as commentary — fall through to next provider.
+_ERROR_TEXT_MARKERS = (
+    "reached its budget",
+    "raise the key budget",
+    "topping up the wallet",
+    "rate limit",
+    "too many requests",
+    "model not found",
+    "model is no longer available",
+)
+
+
+def _is_error_text(text: str) -> bool:
+    lowered = (text or "").lower()
+    return any(marker in lowered for marker in _ERROR_TEXT_MARKERS)
 
 
 def allow_paid_providers() -> bool:
@@ -34,7 +58,9 @@ def _cost_class_for_model(provider_name: str, model: str, *, local: bool = False
     if local:
         return "free"
     lowered = f"{provider_name} {model}".lower()
-    if ":free" in lowered or provider_name in {"Groq", "HuggingFace", "Ollama"}:
+    if ":free" in lowered or provider_name in {"Groq", "HuggingFace", "Gemini", "Pollinations"}:
+        return "free"
+    if "openrouter/free" in lowered:
         return "free"
     if any(token in lowered for token in ("gpt-4", "gpt-5", "o1", "o3", "claude", "opus", "sonnet")):
         return "paid"
@@ -56,25 +82,28 @@ class CompletionResult:
 
 
 class OpenAICompatibleClient:
-    """Client for Groq/OpenRouter-style chat completion endpoints."""
+    """Client for Groq/Gemini/OpenRouter/Pollinations-style chat endpoints."""
 
     def __init__(self, base_url: str, api_key: str, model: str, name: str, cost_class: str = "free"):
         self.base_url = base_url.rstrip("/")
-        self.api_key = api_key
+        self.api_key = (api_key or "").strip()
         self.model = model
         self.name = name
         self.cost_class = cost_class
 
     def complete(self, prompt: str, max_tokens: int = 200) -> Optional[str]:
         try:
+            headers = {
+                "Content-Type": "application/json",
+                "HTTP-Referer": os.getenv("OPENROUTER_SITE_URL", "http://localhost"),
+                "X-Title": os.getenv("OPENROUTER_APP_NAME", "AIRSI AlgoTrader"),
+            }
+            # Pollinations keyless last-resort has no key — omit auth header.
+            if self.api_key:
+                headers["Authorization"] = f"Bearer {self.api_key}"
             response = requests.post(
                 f"{self.base_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": os.getenv("OPENROUTER_SITE_URL", "http://localhost"),
-                    "X-Title": os.getenv("OPENROUTER_APP_NAME", "AIRSI AlgoTrader"),
-                },
+                headers=headers,
                 json={
                     "model": self.model,
                     "messages": [{"role": "user", "content": prompt}],
@@ -122,60 +151,41 @@ class HuggingFaceClient:
             return None
 
 
-class OllamaClient:
-    """Local Ollama client with no external API key."""
+class PollinationsClient(OpenAICompatibleClient):
+    """Keyless free-trial last resort: https://text.pollinations.ai/openai.
 
-    name = "Ollama"
-    cost_class = "free"
+    Anonymous tier ~1 req/15s, basic models, no SLA. Never used for live
+    order decisions — commentary / research fallback only. If all keyed
+    providers hit limits, this keeps free trial alive instead of plain text.
+    """
 
-    def __init__(self, base_url: str = "http://localhost:11434", model: str = "mistral"):
-        self.base_url = base_url.rstrip("/")
-        self.model = model
-
-    def available(self) -> bool:
-        """Cheap reachability probe so missing local Ollama does not stall the chain."""
-        try:
-            response = requests.get(f"{self.base_url}/api/tags", timeout=1.5)
-            return bool(response.ok)
-        except Exception:
-            return False
-
-    def complete(self, prompt: str, max_tokens: int = 200) -> Optional[str]:
-        try:
-            response = requests.post(
-                f"{self.base_url}/api/generate",
-                json={
-                    "model": self.model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {"num_predict": max_tokens, "temperature": 0.3},
-                },
-                timeout=60,
-            )
-            response.raise_for_status()
-            return response.json().get("response", "").strip() or None
-        except Exception as exc:
-            logger.warning("Ollama request failed: %s", exc)
-            return None
+    def __init__(self, model: str = "openai"):
+        super().__init__(
+            "https://text.pollinations.ai/openai",
+            "",
+            model,
+            "Pollinations",
+            cost_class="free",
+        )
 
 
 class AIClient:
-    """Advisory-only fallback chain: Ollama → Groq → HuggingFace → OpenRouter free."""
+    """Advisory-only chain: Groq -> Gemini -> HuggingFace -> OpenRouter :free -> Pollinations keyless."""
 
     def __init__(self):
         self._providers: list[object] | None = None
         self._static_providers: list[object] = []
-        self._ollama = OllamaClient(
-            base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
-            model=os.getenv("OLLAMA_MODEL", "mistral"),
-        )
-        groq_key = os.getenv("GROQ_API_KEY", "")
-        openrouter_key = os.getenv("OPENROUTER_API_KEY", "")
-        hf_key = os.getenv("HUGGINGFACE_API_KEY", "")
+        groq_key = os.getenv("GROQ_API_KEY", "").strip()
+        gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
+        openrouter_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+        hf_key = os.getenv("HUGGINGFACE_API_KEY", "").strip()
         paid_ok = allow_paid_providers()
 
         if groq_key:
-            groq_model = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+            # Sep 2026: llama-3.1-8b-instant + llama-3.3-70b-versatile shut down 08/16/26
+            # (free/dev). Groq recommends openai/gpt-oss-20b (fast) / openai/gpt-oss-120b or
+            # qwen/qwen3-32b (quality). Default to gpt-oss-20b for free-tier survival.
+            groq_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b").strip() or "openai/gpt-oss-20b"
             self._static_providers.append(
                 OpenAICompatibleClient(
                     "https://api.groq.com/openai/v1",
@@ -183,6 +193,18 @@ class AIClient:
                     groq_model,
                     "Groq",
                     cost_class=_cost_class_for_model("Groq", groq_model),
+                )
+            )
+        if gemini_key:
+            # Gemini via OpenAI-compatible endpoint. Free tier, no card.
+            gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip() or "gemini-2.5-flash"
+            self._static_providers.append(
+                OpenAICompatibleClient(
+                    "https://generativelanguage.googleapis.com/v1beta/openai",
+                    gemini_key,
+                    gemini_model,
+                    "Gemini",
+                    cost_class=_cost_class_for_model("Gemini", gemini_model),
                 )
             )
         if hf_key:
@@ -193,11 +215,13 @@ class AIClient:
                 )
             )
         if openrouter_key:
+            # Default openrouter/free router auto-picks a free model — survives rotation.
+            # Pinned alts: openai/gpt-oss-20b:free, meta-llama/llama-3.3-70b-instruct:free (if listed)
             openrouter_model = os.getenv(
                 "OPENROUTER_MODEL",
-                "meta-llama/llama-3.1-8b-instruct:free",
-            )
-            openrouter_free = ":free" in openrouter_model.lower()
+                "openrouter/free",
+            ).strip() or "openrouter/free"
+            openrouter_free = ":free" in openrouter_model.lower() or openrouter_model == "openrouter/free"
             if openrouter_free or paid_ok:
                 self._static_providers.append(
                     OpenAICompatibleClient(
@@ -213,16 +237,17 @@ class AIClient:
                     "Skipping paid OpenRouter model %s; set AI_ALLOW_PAID=1 or use a :free model",
                     openrouter_model,
                 )
+        # Keyless last resort — always present so free trial survives key limits.
+        # Anon ~1 req/15s. Commentary only, never trading signal.
+        pollinations_model = os.getenv("POLLINATIONS_MODEL", "openai").strip() or "openai"
+        if os.getenv("POLLINATIONS_DISABLED", "").strip().lower() not in {"1", "true", "yes", "on"}:
+            self._static_providers.append(PollinationsClient(pollinations_model))
 
     def _live_providers(self) -> list[object]:
-        """Rebuild the live chain so a newly started Ollama instance is preferred."""
+        """Return API-only chain in priority order."""
         if self._providers is not None:
             return self._providers
-        providers: list[object] = []
-        if self._ollama.available():
-            providers.append(self._ollama)
-        providers.extend(self._static_providers)
-        return providers
+        return list(self._static_providers)
 
     def complete_with_meta(self, prompt: str, max_tokens: int = 200) -> CompletionResult:
         """Return commentary and the provider/cost class used for this call."""
@@ -243,6 +268,9 @@ class AIClient:
                 logger.warning("%s provider failed: %s", name, exc)
                 continue
             if isinstance(text, str) and text.strip():
+                if _is_error_text(text):
+                    logger.warning("%s returned quota/error text, trying next provider", name)
+                    continue
                 result = CompletionResult(text.strip(), name, cost_class)
                 logger.info("AI %s", result.log_line())
                 return result

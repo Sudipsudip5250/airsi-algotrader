@@ -3,6 +3,12 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# System libs for numpy/pandas (harmless if already set)
+if [[ -f "$ROOT_DIR/scripts/env_libs.sh" ]]; then
+  # shellcheck disable=SC1091
+  source "$ROOT_DIR/scripts/env_libs.sh"
+fi
+
 if [[ -f "$ROOT_DIR/.env" ]]; then
   set -a
   # shellcheck disable=SC1091
